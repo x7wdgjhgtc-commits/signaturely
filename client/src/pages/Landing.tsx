@@ -169,14 +169,21 @@ function TryDemoButton() {
 // engine the app uses in production (SignaturePreview → renderSignatureHtml).
 // That guarantees the marketing preview always matches what customers get,
 // and any template improvements automatically flow through to the landing page.
+// Resolve to a fully-qualified URL so in-app browsers (Facebook / Instagram /
+// Messenger WebViews) always load the assets correctly — relative paths can
+// fail inside embedded WebViews with modified referrer/base behaviour.
+const ASSET_ORIGIN =
+  typeof window !== "undefined" ? window.location.origin : "";
+const assetUrl = (p: string) => `${ASSET_ORIGIN}${p}`;
+
 const HERO_BRAND: BrandConfig = {
   ...defaultBrandConfig,
   layout: "horizontal", // logo | name+contact, banner rendered underneath
-  logoUrl: "/apple-logo.png",
+  logoUrl: assetUrl("/apple-logo.png"),
   logoWidth: 120,
   logoAlign: "middle",
   logoHAlign: "left",
-  bannerUrl: "/apple-banner.png",
+  bannerUrl: assetUrl("/apple-banner.png"),
   bannerWidth: 520,
   bannerHref: "https://www.apple.com/iphone-15-pro/",
 
@@ -226,7 +233,7 @@ const HERO_STAFF: Staff = {
   mobile: "",
   website: "apple.com",
   address: "",
-  photoUrl: "/steve-jobs.jpg",
+  photoUrl: assetUrl("/steve-jobs.jpg"),
   pronouns: "",
   bookingUrl: "",
   linkedin: "",
