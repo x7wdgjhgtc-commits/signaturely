@@ -314,23 +314,14 @@
     inset: -1px;
   }
 
-  /* Landing hero: scale the whole "email" card (message body + signature)
-     down on phone viewports so the fixed-pixel signature template fits
-     without clipping and without expanding the page. Desktop keeps 1:1. */
+  /* Landing hero: shrink the whole "email" card (message body + signature)
+     on phone viewports so the fixed-pixel signature template fits without
+     clipping. Uses `zoom` (rather than `transform: scale`) so the browser
+     reflows layout at the reduced size — no phantom whitespace below the
+     card. Desktop keeps 1:1. */
   @media (max-width: 640px) {
-    .hero-email-scale > .relative,
-    .hero-email-scale > * {
-      transform-origin: top left;
-      transform: scale(0.62);
-      width: 161.29%;              /* 100 / 0.62 — pre-scale width so the */
-                                    /* card renders at its natural desktop */
-                                    /* dims then scales down inside viewport */
-    }
-    /* Reserve the correct visual height so following sections don't overlap */
     .hero-email-scale {
-      height: auto;
-      margin-bottom: -38%;          /* claw back vertical space added by the */
-                                    /* transformed element's original height */
+      zoom: 0.62;                   /* 375 / ≈605 (card natural width) */
     }
   }
 }
