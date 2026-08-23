@@ -1065,6 +1065,7 @@ function BrandEditor({
             onResizeLogo={(px) => update("logoWidth", px)}
             onResizeBanner={(px) => update("bannerWidth", px)}
             onResizePhoto={(px) => update("photoSize", px)}
+            onResizeCertBadge={(px) => update("certBadgeSize", px)}
           />
         </div>
       </div>
@@ -1716,6 +1717,7 @@ function BrandEditor({
             onResizeLogo={(px) => update("logoWidth", px)}
             onResizeBanner={(px) => update("bannerWidth", px)}
             onResizePhoto={(px) => update("photoSize", px)}
+            onResizeCertBadge={(px) => update("certBadgeSize", px)}
           />
         </div>
         <p className="text-xs text-muted-foreground mt-2 leading-relaxed">

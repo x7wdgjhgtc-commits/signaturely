@@ -18,9 +18,10 @@ interface Props {
   onResizeLogo?: (px: number) => void;
   onResizeBanner?: (px: number) => void;
   onResizePhoto?: (px: number) => void;
+  onResizeCertBadge?: (px: number) => void;
 }
 
-type HandleKind = "logo" | "banner" | "photo";
+type HandleKind = "logo" | "banner" | "photo" | "certBadge";
 
 interface Handle {
   kind: HandleKind;
@@ -37,6 +38,7 @@ export function SignaturePreview({
   onResizeLogo,
   onResizeBanner,
   onResizePhoto,
+  onResizeCertBadge,
 }: Props) {
   const outerRef = useRef<HTMLDivElement>(null); // scroll/padded container
   const layerRef = useRef<HTMLDivElement>(null); // absolute positioning parent (same rect as outer)
@@ -73,14 +75,19 @@ export function SignaturePreview({
       if (!img.complete || img.naturalWidth === 0) return;
       const src = img.getAttribute("src") || "";
       let kind: HandleKind | null = null;
+      // Match a certification badge first so it takes priority over the generic
+      // photo fallback (badges are small non-logo/non-banner images too).
+      const isBadge = (brand.certBadges || []).some((b) => b.url && b.url === src);
       if (brand.bannerUrl && src === brand.bannerUrl && onResizeBanner) kind = "banner";
       else if (brand.logoUrl && src === brand.logoUrl && onResizeLogo) kind = "logo";
+      else if (isBadge && onResizeCertBadge) kind = "certBadge";
       else if (
         onResizePhoto &&
         img.clientWidth >= 40 &&
         !src.startsWith("data:image/svg+xml") &&
         src !== brand.logoUrl &&
-        src !== brand.bannerUrl
+        src !== brand.bannerUrl &&
+        !isBadge
       )
         kind = "photo";
       if (!kind) return;
@@ -144,7 +151,7 @@ export function SignaturePreview({
       timers.forEach((t) => window.clearTimeout(t));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html, brand.logoWidth, brand.bannerWidth, brand.photoSize]);
+  }, [html, brand.logoWidth, brand.bannerWidth, brand.photoSize, brand.certBadgeSize]);
 
   // Re-fit + re-measure on any size change of the container.
   useEffect(() => {
@@ -169,14 +176,30 @@ export function SignaturePreview({
         ? brand.logoWidth
         : kind === "banner"
         ? brand.bannerWidth
+        : kind === "certBadge"
+        ? brand.certBadgeSize
         : brand.photoSize;
     const startX = e.clientX;
     // Drag deltas are in screen pixels — divide by the current display scale so
     // one pixel of finger movement equals one pixel of natural-size change.
     const activeScale = scale || 1;
 
-    const min = kind === "photo" ? 48 : kind === "logo" ? 40 : 120;
-    const max = kind === "photo" ? 140 : kind === "logo" ? 400 : 720;
+    const min =
+      kind === "photo"
+        ? 48
+        : kind === "logo"
+        ? 40
+        : kind === "certBadge"
+        ? 32
+        : 120;
+    const max =
+      kind === "photo"
+        ? 140
+        : kind === "logo"
+        ? 400
+        : kind === "certBadge"
+        ? 96
+        : 720;
 
     document.body.style.cursor = "nwse-resize";
     document.body.style.userSelect = "none";
@@ -186,6 +209,7 @@ export function SignaturePreview({
       const next = Math.round(Math.min(max, Math.max(min, startVal + dx)));
       if (kind === "logo") onResizeLogo?.(next);
       else if (kind === "banner") onResizeBanner?.(next);
+      else if (kind === "certBadge") onResizeCertBadge?.(next);
       else if (kind === "photo") onResizePhoto?.(next);
     };
     const onUp = () => {
@@ -238,7 +262,7 @@ export function SignaturePreview({
     toast({ title: "HTML copied", description: "Paste as source in your email client." });
   }
 
-  const showHandles = !!(onResizeLogo || onResizeBanner || onResizePhoto);
+  const showHandles = !!(onResizeLogo || onResizeBanner || onResizePhoto || onResizeCertBadge);
 
   return (
     <div className="space-y-3">
