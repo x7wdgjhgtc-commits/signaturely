@@ -220,7 +220,7 @@ export const brandConfigSchema = z.object({
         href: z.string().default(""),
       })
     )
-    .max(6)
+    .max(10)
     .default([]),
   certBadgeSize: z.number().int().min(32).max(96).default(56),
 

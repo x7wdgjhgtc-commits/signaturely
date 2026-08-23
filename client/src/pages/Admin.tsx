@@ -1513,7 +1513,7 @@ function BrandEditor({
                       </div>
                     ))}
                   </div>
-                  {(local.certBadges || []).length < 6 && (
+                  {(local.certBadges || []).length < 10 && (
                     <Button
                       type="button"
                       variant="outline"
