@@ -42,17 +42,10 @@ export default function PublicSignature() {
   const { brand, staff, company, plan } = q.data;
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-2">
-          <span className="font-serif text-lg">Signaturely</span>
-          <span className="text-xs text-muted-foreground ml-2">
-            for {company.name}
-          </span>
-        </div>
-      </header>
+    <div className="min-h-screen bg-muted/30 flex flex-col">
+      <BrandedHeader company={company} brand={brand} />
 
-      <main className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+      <main className="max-w-3xl w-full mx-auto px-6 py-10 space-y-8 flex-1">
         <div>
           <h1 className="font-serif text-3xl mb-2">
             Hey {staff.fullName.split(" ")[0]} — here's your signature
@@ -99,7 +92,78 @@ export default function PublicSignature() {
           Details wrong? Ask your admin at {company.name} to update your profile.
         </div>
       </main>
+      <PoweredBy />
     </div>
+  );
+}
+
+// Business-first header — uses the company's logo + primary brand color so the
+// recipient feels like this page came from their employer. Signaturely gets a
+// small, non-intrusive attribution in the footer instead.
+function BrandedHeader({
+  company,
+  brand,
+}: {
+  company: { name: string; slug: string };
+  brand: BrandConfig;
+}) {
+  const initials = company.name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  const primary = brand.primaryColor || "#0f766e";
+  return (
+    <header
+      className="border-b border-border bg-card"
+      style={{ borderTopColor: primary, borderTopWidth: 3, borderTopStyle: "solid" }}
+    >
+      <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
+        {brand.logoUrl ? (
+          <img
+            src={brand.logoUrl}
+            alt={company.name}
+            className="h-9 w-auto max-w-[180px] object-contain"
+          />
+        ) : (
+          <div
+            className="w-9 h-9 rounded-md flex items-center justify-center font-semibold text-sm text-white"
+            style={{ backgroundColor: primary }}
+          >
+            {initials || "·"}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div
+            className="font-serif text-lg leading-tight truncate"
+            style={{ color: primary }}
+          >
+            {company.name}
+          </div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Email signature
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function PoweredBy() {
+  return (
+    <footer className="border-t border-border bg-card mt-8">
+      <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <span>Powered by</span>
+        <a
+          href="/#/"
+          className="font-serif text-sm text-foreground hover:underline"
+        >
+          Signaturely
+        </a>
+      </div>
+    </footer>
   );
 }
 
