@@ -237,8 +237,11 @@ const HERO_STAFF: Staff = {
 };
 
 function HeroPreview() {
+  // On phone viewports the whole "email" card (message body + signature)
+  // scales down together so the fixed-pixel signature template fits without
+  // clipping. Desktop keeps 1:1 dimensions.
   return (
-    <div className="relative">
+    <div className="hero-email-scale relative">
       <Card className="relative overflow-hidden border-slate-200 shadow-xl">
         <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-3 text-xs text-slate-500">
           To: board@apple.com &nbsp;·&nbsp; From: sjobs@apple.com
