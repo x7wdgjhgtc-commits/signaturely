@@ -629,10 +629,10 @@ function FinalCta() {
       <div className="rounded-3xl bg-teal-800 p-12 text-white shadow-xl">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-            Look consistent by Friday.
+            Look consistent in seconds.
           </h2>
           <p className="mt-3 text-teal-100">
-            Sign up today, roll it out this week. Or take the demo for a spin — no signup needed.
+            Sign up, invite your team, ship a signature — all in under a minute. Or take the demo for a spin, no signup needed.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup">
