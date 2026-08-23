@@ -23,7 +23,7 @@ export default function Landing() {
   }, [loading, company, navigate]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden">
       <MarketingNav />
       <Hero />
       <TrustBar />
@@ -250,15 +250,12 @@ function HeroPreview() {
           <div className="text-slate-500">Best,<br />Steve</div>
 
           {/* Real signature rendered by the production template engine.
-              The signature template uses fixed pixel widths (as email clients require).
-              On phone viewports the raw preview would squish awkwardly — one word per
-              line — so we render it at its natural desktop width and then
-              proportionally scale it down via CSS transform, matching the layout users
-              actually see in their inbox. */}
+              The template uses fixed pixel widths (as email clients require).
+              On narrow viewports the preview stays at its natural desktop size
+              and scrolls horizontally inside its own container so the layout
+              matches what customers see in an inbox. */}
           <div className="pt-2">
-            <div className="hero-signature-scale">
-              <SignaturePreview brand={HERO_BRAND} staff={HERO_STAFF} showCopy={false} />
-            </div>
+            <SignaturePreview brand={HERO_BRAND} staff={HERO_STAFF} showCopy={false} />
           </div>
         </CardContent>
       </Card>

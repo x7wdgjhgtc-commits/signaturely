@@ -314,27 +314,4 @@
     inset: -1px;
   }
 
-  /* --- Landing hero: scale the signature preview down on phone viewports so
-     the email-client table layout is preserved instead of squished. The
-     signature template uses fixed pixel widths (as real email clients require),
-     which don't reflow — scaling the whole block preserves the layout
-     proportions. Desktop keeps 1:1. */
-  .hero-signature-scale > * {
-    transform-origin: top left;
-  }
-  @media (max-width: 640px) {
-    .hero-signature-scale {
-      /* Reserve just enough vertical space for the scaled preview so the
-         following content doesn't overlap the transformed element. */
-      height: auto;
-    }
-    .hero-signature-scale > * {
-      transform: scale(0.62);
-      width: 161.29%;              /* 100 / 0.62 — pre-scale width so the */
-                                    /* preview renders at desktop dims then */
-                                    /* scales down inside the viewport */
-      margin-bottom: -38%;          /* claw back the vertical whitespace */
-                                    /* introduced by the scale transform */
-    }
-  }
 }

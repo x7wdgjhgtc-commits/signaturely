@@ -207,9 +207,10 @@ export function SignaturePreview({
             Because it's inside outerRef with `p-6`, we position it at inset-0 minus padding by
             wrapping preview + handles together.
 
-            The inline min-width keeps the email-client table from collapsing on
-            narrow viewports — the outer wrapper scrolls horizontally instead of
-            squishing name/title/contact text into a single-word-per-line stack. */}
+            The inline min-width keeps the email-client table from squishing on
+            narrow viewports — the outer wrapper's `overflow-x-auto max-w-full`
+            gives the block its own horizontal scrollbar without breaking the
+            surrounding page layout. */}
         <div ref={layerRef} className="relative" style={{ minWidth: 520, width: "max-content" }}>
           <div
             ref={previewRef}
