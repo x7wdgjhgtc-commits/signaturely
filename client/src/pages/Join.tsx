@@ -171,7 +171,7 @@ export default function Join() {
   if (done) {
     return (
       <div className="min-h-screen bg-muted/30">
-        <PageHeader companyName={ctx.company.name} />
+        <BrandedHeader company={ctx.company} brand={ctx.brand} />
         <main className="max-w-3xl mx-auto px-6 py-10 space-y-6">
           <div>
             <h1 className="font-serif text-3xl mb-2">
@@ -221,30 +221,19 @@ export default function Join() {
             </a>
           </div>
         </main>
+        <PoweredBy />
       </div>
     );
   }
 
   // Form state.
   return (
-    <div className="min-h-screen bg-muted/30">
-      <PageHeader companyName={ctx.company.name} />
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">
-            {ctx.company.name}
-          </div>
-          <h1 className="font-serif text-3xl mt-1 mb-2">
-            Set up your email signature
-          </h1>
-          <p className="text-muted-foreground max-w-2xl">
-            Fill in your details below. Your team’s brand and layout are already
-            configured — just add your info and you’ll get a copy-and-paste
-            signature link at the end.
-          </p>
-        </div>
+    <div className="min-h-screen bg-muted/30 flex flex-col">
+      <BrandedHeader company={ctx.company} brand={ctx.brand} />
+      <BrandedHero company={ctx.company} brand={ctx.brand} />
+      <main className="max-w-5xl w-full mx-auto px-6 py-8 flex-1">
 
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 items-start">
+        <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 items-start">
           <div className="space-y-4">
             <Card className="p-5 space-y-3">
               <SectionHeading>Basics</SectionHeading>
@@ -401,23 +390,110 @@ export default function Join() {
           </div>
         </div>
       </main>
+      <PoweredBy />
     </div>
   );
 }
 
-function PageHeader({ companyName }: { companyName: string }) {
+// A branded header that leads with the *business* — their logo (if uploaded)
+// and name in their primary brand color. Signaturely stays out of the way here
+// (the small "Powered by" mark appears once in the footer), so the recipient
+// feels like the invite came from their employer, not from us.
+function BrandedHeader({
+  company,
+  brand,
+}: {
+  company: { name: string; slug: string };
+  brand: BrandConfig;
+}) {
+  const initials = company.name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  const primary = brand.primaryColor || "#0f766e";
   return (
-    <header className="border-b border-border bg-card">
-      <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm">
-          S
+    <header
+      className="border-b border-border bg-card"
+      style={{ borderTopColor: primary, borderTopWidth: 3, borderTopStyle: "solid" }}
+    >
+      <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
+        {brand.logoUrl ? (
+          <img
+            src={brand.logoUrl}
+            alt={company.name}
+            className="h-9 w-auto max-w-[180px] object-contain"
+          />
+        ) : (
+          <div
+            className="w-9 h-9 rounded-md flex items-center justify-center font-semibold text-sm text-white"
+            style={{ backgroundColor: primary }}
+          >
+            {initials || "·"}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="font-serif text-lg leading-tight truncate" style={{ color: primary }}>
+            {company.name}
+          </div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Team email signature
+          </div>
         </div>
-        <span className="font-serif text-lg">Signaturely</span>
-        <span className="text-xs text-muted-foreground ml-2">
-          for {companyName}
-        </span>
       </div>
     </header>
+  );
+}
+
+// Hero band styled with the company's brand colour, framing the form as an
+// action *from* the business.
+function BrandedHero({
+  company,
+  brand,
+}: {
+  company: { name: string; slug: string };
+  brand: BrandConfig;
+}) {
+  const primary = brand.primaryColor || "#0f766e";
+  return (
+    <section
+      className="border-b border-border"
+      style={{ backgroundColor: `${primary}10` }}
+    >
+      <div className="max-w-5xl mx-auto px-6 py-10">
+        <div className="text-xs uppercase tracking-wider" style={{ color: primary }}>
+          Welcome to {company.name}
+        </div>
+        <h1 className="font-serif text-3xl mt-2 mb-2">
+          Set up your email signature
+        </h1>
+        <p className="text-muted-foreground max-w-2xl">
+          Your team’s brand and layout are already configured — just add your
+          personal details and you’ll get a copy-and-paste signature link at
+          the end.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// Small, non-intrusive attribution — required so we get credit while keeping
+// the page feeling like the business’s own.
+function PoweredBy() {
+  return (
+    <footer className="border-t border-border bg-card mt-8">
+      <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <span>Powered by</span>
+        <a
+          href="/#/"
+          className="font-serif text-sm text-foreground hover:underline"
+        >
+          Signaturely
+        </a>
+      </div>
+    </footer>
   );
 }
 
