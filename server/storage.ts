@@ -223,6 +223,19 @@ export class DatabaseStorage implements IStorage {
       .get();
   }
 
+  // Small helper for the demo re-seed path (rename the workspace in place).
+  async updateCompany(
+    id: number,
+    patch: Partial<{ name: string; brandConfig: string }>,
+  ): Promise<Company | undefined> {
+    return db
+      .update(companies)
+      .set(patch)
+      .where(eq(companies.id, id))
+      .returning()
+      .get();
+  }
+
   async listStaff(companyId: number): Promise<Staff[]> {
     return db
       .select()
@@ -371,53 +384,122 @@ export const storage = new DatabaseStorage();
 // Seed a default workspace on first boot so the site is usable immediately.
 // Useful while iterating — remove or gate behind an env var for real deployments.
 export async function seedDefaultWorkspace() {
+  // Seeded demo mirrors the landing page's Apple / Steve Jobs example so
+  // people who click “Try the demo” see exactly the signature they saw on
+  // the homepage. Assets live in /client/public and are served from the same
+  // origin so the demo works offline of any external CDN.
+  const appleBrand = {
+    ...defaultBrandConfig,
+    companyDisplayName: "Apple Inc.",
+    tagline: "Think different.",
+    companyWebsite: "apple.com",
+    companyAddress: "One Apple Park Way, Cupertino, CA 95014",
+    layout: "horizontal" as const,
+    logoUrl: "/apple-logo.png",
+    logoWidth: 120,
+    logoAlign: "middle" as const,
+    logoHAlign: "left" as const,
+    bannerUrl: "/apple-banner.png",
+    bannerWidth: 520,
+    bannerHref: "https://www.apple.com/iphone-15-pro/",
+    primaryColor: "#000000",
+    textColor: "#1d1d1f",
+    mutedColor: "#6e6e73",
+    dividerColor: "#d2d2d7",
+    accentColor: "#0071e3",
+    fontFamily: "Helvetica",
+  };
+
   const existing = await storage.getCompanyBySlug("demo");
-  if (existing) return existing;
+  if (existing) {
+    // Already Apple? Nothing to do.
+    if (existing.name === "Apple Inc.") return existing;
+    // Otherwise upgrade the old “Demo Workspace / Jane Doe” install in
+    // place: replace brand + staff without touching the company row's id.
+    await storage.updateCompany(existing.id, {
+      name: "Apple Inc.",
+      brandConfig: JSON.stringify(appleBrand),
+    });
+    const staffRows = await storage.listStaff(existing.id);
+    for (const s of staffRows) {
+      await storage.deleteStaff(existing.id, s.id);
+    }
+    await storage.createStaff(existing.id, {
+      slug: "steve-jobs",
+      fullName: "Steve Jobs",
+      jobTitle: "Chief Executive Officer",
+      department: "",
+      email: "sjobs@apple.com",
+      phone: "+1 (408) 996-1010",
+      mobile: "",
+      website: "apple.com",
+      address: "",
+      photoUrl: "/steve-jobs.jpg",
+      pronouns: "",
+      bookingUrl: "",
+      linkedin: "",
+      twitter: "",
+      instagram: "",
+      facebook: "",
+    });
+    await storage.createStaff(existing.id, {
+      slug: "tim-cook",
+      fullName: "Tim Cook",
+      jobTitle: "Chief Executive Officer",
+      department: "",
+      email: "tcook@apple.com",
+      phone: "+1 (408) 996-1010",
+      mobile: "",
+      website: "apple.com",
+      address: "",
+      photoUrl: "",
+      pronouns: "",
+      bookingUrl: "",
+      linkedin: "",
+      twitter: "",
+      instagram: "",
+      facebook: "",
+    });
+    return (await storage.getCompanyBySlug("demo")) ?? existing;
+  }
+
   const company = await storage.createCompany({
     slug: "demo",
-    name: "Demo Workspace",
-    adminEmail: "admin@demo.local",
-    brandConfig: JSON.stringify({
-      ...defaultBrandConfig,
-      companyDisplayName: "Demo Workspace",
-      tagline: "Consistent signatures for every inbox",
-      companyWebsite: "demo.local",
-      companyAddress: "Brisbane, QLD",
-      primaryColor: "#0f766e",
-      accentColor: "#0f766e",
-    }),
+    name: "Apple Inc.",
+    adminEmail: "admin@apple.demo",
+    brandConfig: JSON.stringify(appleBrand),
     password: "demo1234",
   });
   await storage.createStaff(company.id, {
-    slug: "",
-    fullName: "Jane Doe",
-    jobTitle: "Managing Director",
+    slug: "steve-jobs",
+    fullName: "Steve Jobs",
+    jobTitle: "Chief Executive Officer",
     department: "",
-    email: "jane@demo.local",
-    phone: "+61 7 5000 1234",
-    mobile: "+61 400 111 222",
-    website: "demo.local",
+    email: "sjobs@apple.com",
+    phone: "+1 (408) 996-1010",
+    mobile: "",
+    website: "apple.com",
     address: "",
-    photoUrl: "",
+    photoUrl: "/steve-jobs.jpg",
     pronouns: "",
     bookingUrl: "",
-    linkedin: "linkedin.com/in/janedoe",
+    linkedin: "",
     twitter: "",
     instagram: "",
     facebook: "",
   });
   await storage.createStaff(company.id, {
-    slug: "",
-    fullName: "Sam Rivera",
-    jobTitle: "Head of Operations",
+    slug: "tim-cook",
+    fullName: "Tim Cook",
+    jobTitle: "Chief Executive Officer",
     department: "",
-    email: "sam@demo.local",
-    phone: "",
-    mobile: "+61 400 555 000",
-    website: "",
+    email: "tcook@apple.com",
+    phone: "+1 (408) 996-1010",
+    mobile: "",
+    website: "apple.com",
     address: "",
     photoUrl: "",
-    pronouns: "they/them",
+    pronouns: "",
     bookingUrl: "",
     linkedin: "",
     twitter: "",

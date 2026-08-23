@@ -126,9 +126,9 @@ export default function Admin() {
       {/* Header — stacks on mobile so wordmark + workspace share row 1 and the
           action buttons wrap to row 2 without overflowing the viewport. */}
       <header className="border-b border-border bg-card/50 sticky top-0 z-10 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2 gap-x-3">
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <span className="text-lg font-semibold tracking-tight text-slate-900 shrink-0">Signaturely</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+            <span className="text-base sm:text-lg font-semibold tracking-tight text-slate-900 shrink-0">Signaturely</span>
             <div className="border-l border-slate-200 pl-3 sm:pl-4 min-w-0">
               <div className="text-sm font-semibold truncate">{company.name}</div>
               <div className="text-xs text-muted-foreground font-mono truncate">
@@ -136,7 +136,7 @@ export default function Admin() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             <PlanBadge
               plan={company.plan}
               status={company.subscriptionStatus}
@@ -146,7 +146,7 @@ export default function Admin() {
               <Button
                 size="sm"
                 variant={company.plan === "free" ? "default" : "outline"}
-                className={company.plan === "free" ? "bg-teal-700 hover:bg-teal-800" : ""}
+                className={`${company.plan === "free" ? "bg-teal-700 hover:bg-teal-800" : ""} px-2 sm:px-3`}
               >
                 {company.plan === "free" ? "Upgrade" : "Manage plan"}
               </Button>
@@ -158,7 +158,8 @@ export default function Admin() {
                 await logout();
                 navigate("/");
               }}
-              className="gap-2"
+              className="gap-2 px-2 sm:px-3"
+              title="Sign out"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Sign out</span>
@@ -169,18 +170,36 @@ export default function Admin() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Tabs value={tab} onValueChange={(v) => setTab(v as "staff" | "company" | "brand")}>
-          {/* Horizontally scroll the tab strip on narrow viewports so labels
-              stay legible instead of clipping off-screen. */}
-          <div className="mb-6 -mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
-            <TabsList className="w-max">
-              <TabsTrigger value="staff" data-testid="tab-staff" className="gap-2">
-                <Users className="w-4 h-4" /> Staff
+          {/* On phones the tab strip stretches to fill the viewport with tight
+              padding so all three labels fit; on wider screens it reverts to
+              a self-sized strip. */}
+          <div className="mb-6">
+            <TabsList className="w-full sm:w-max grid grid-cols-3 sm:inline-flex">
+              <TabsTrigger
+                value="staff"
+                data-testid="tab-staff"
+                className="gap-1.5 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm"
+              >
+                <Users className="w-4 h-4 shrink-0" />
+                <span>Staff</span>
               </TabsTrigger>
-              <TabsTrigger value="company" data-testid="tab-company" className="gap-2">
-                <Building2 className="w-4 h-4" /> Company info
+              <TabsTrigger
+                value="company"
+                data-testid="tab-company"
+                className="gap-1.5 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm"
+              >
+                <Building2 className="w-4 h-4 shrink-0" />
+                <span className="truncate">Company</span>
+                <span className="hidden sm:inline">info</span>
               </TabsTrigger>
-              <TabsTrigger value="brand" data-testid="tab-brand" className="gap-2">
-                <Palette className="w-4 h-4" /> Brand & template
+              <TabsTrigger
+                value="brand"
+                data-testid="tab-brand"
+                className="gap-1.5 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm"
+              >
+                <Palette className="w-4 h-4 shrink-0" />
+                <span className="truncate">Brand</span>
+                <span className="hidden sm:inline">& template</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -352,10 +371,10 @@ function StaffRow({
 
   return (
     <div
-      className="bg-card border border-card-border rounded-lg p-4 flex items-center gap-4 hover:border-primary/40 transition-colors"
+      className="bg-card border border-card-border rounded-lg p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:border-primary/40 transition-colors"
       data-testid={`row-staff-${staff.id}`}
     >
-      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shrink-0">
+      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shrink-0 text-sm">
         {staff.photoUrl ? (
           <img
             src={staff.photoUrl}
@@ -375,42 +394,51 @@ function StaffRow({
         <div className="font-medium truncate" data-testid={`text-name-${staff.id}`}>
           {staff.fullName}
         </div>
-        <div className="text-sm text-muted-foreground truncate">
+        <div className="text-xs sm:text-sm text-muted-foreground truncate">
           {staff.jobTitle}
           {staff.email ? ` · ${staff.email}` : ""}
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1"
-        onClick={() => {
-          navigator.clipboard.writeText(shareUrl);
-          toast({ title: "Share link copied", description: shareUrl });
-        }}
-        data-testid={`button-copy-link-${staff.id}`}
-      >
-        <Link2 className="w-4 h-4" />
-        <span className="hidden sm:inline">Copy link</span>
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() =>
-          window.open(`#/s/${companySlug}/${staff.slug}`, "_blank")
-        }
-        data-testid={`button-view-${staff.id}`}
-      >
-        <Eye className="w-4 h-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onEdit}
-        data-testid={`button-edit-${staff.id}`}
-      >
-        <Pencil className="w-4 h-4" />
-      </Button>
+      {/* Icon-only action group on mobile so all three actions fit; the
+          copy button reveals its label from `sm` upward. */}
+      <div className="flex items-center gap-0 sm:gap-1 shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1 px-2 sm:px-3"
+          onClick={() => {
+            navigator.clipboard.writeText(shareUrl);
+            toast({ title: "Share link copied", description: shareUrl });
+          }}
+          data-testid={`button-copy-link-${staff.id}`}
+          title="Copy share link"
+        >
+          <Link2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Copy link</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="px-2 sm:px-3"
+          onClick={() =>
+            window.open(`#/s/${companySlug}/${staff.slug}`, "_blank")
+          }
+          data-testid={`button-view-${staff.id}`}
+          title="View signature"
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="px-2 sm:px-3"
+          onClick={onEdit}
+          data-testid={`button-edit-${staff.id}`}
+          title="Edit"
+        >
+          <Pencil className="w-4 h-4" />
+        </Button>
+      </div>
     </div>
   );
 }
