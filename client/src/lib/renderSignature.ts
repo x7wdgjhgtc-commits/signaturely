@@ -230,6 +230,24 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       ? `<tr><td colspan="${cols}" style="padding-top:12px;">${bannerCellInner}</td></tr>`
       : "";
 
+  // Certification / accreditation badges: small 1:1 squares in a horizontal row.
+  // Rendered inside a nested table so widths stay predictable across email clients.
+  const badgeSize = Math.max(32, Math.min(96, brand.certBadgeSize || 56));
+  const badges = (brand.certBadges || []).filter((b) => b && b.url);
+  const makeBadgesHtml = (cols: number) => {
+    if (badges.length === 0) return "";
+    const cells = badges
+      .map((b) => {
+        const img = `<img src="${esc(b.url)}" alt="${esc(b.alt || "")}" width="${badgeSize}" height="${badgeSize}" style="display:block; border:0; width:${badgeSize}px; height:${badgeSize}px; object-fit:contain; border-radius:6px;" />`;
+        const wrapped = b.href
+          ? `<a href="${esc(normalizeUrl(b.href))}" style="text-decoration:none;" title="${esc(b.alt || "")}">${img}</a>`
+          : img;
+        return `<td style="padding-right:8px; vertical-align:middle;">${wrapped}</td>`;
+      })
+      .join("");
+    return `<tr><td colspan="${cols}" style="padding-top:10px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>${cells}</tr></table></td></tr>`;
+  };
+
   const disclaimerHtml = disclaimer
     ? `<tr><td style="${smallStyle} padding-top:10px; max-width:520px;">${esc(disclaimer)}</td></tr>`
     : "";
@@ -323,6 +341,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
         <tr><td>${socialsHtml}</td></tr>
         <tr><td>${ctaHtml}</td></tr>
         ${makeBannerHtml(1)}
+        ${makeBadgesHtml(1)}
         ${disclaimerHtml}
       </table>
     `;
@@ -337,6 +356,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
           </td>
         </tr>
         ${makeBannerHtml(compactCols)}
+        ${makeBadgesHtml(compactCols)}
         ${disclaimerHtml}
       </table>
     `;
@@ -358,6 +378,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
           </td>
         </tr>
         ${makeBannerHtml(photoLeftCols)}
+        ${makeBadgesHtml(photoLeftCols)}
         ${disclaimerHtml}
       </table>
     `;
@@ -400,6 +421,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
           </td>
         </tr>
         ${makeBannerHtml(horizCols)}
+        ${makeBadgesHtml(horizCols)}
         ${disclaimerHtml}
       </table>
     `;
@@ -426,6 +448,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
           </td>
         </tr>
         ${makeBannerHtml(dividedCols)}
+        ${makeBadgesHtml(dividedCols)}
         ${disclaimerHtml}
       </table>
     `;
@@ -483,6 +506,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
         <tr><td align="center" style="text-align:center;">${centeredSocials}</td></tr>
         <tr><td align="center" style="text-align:center;">${centeredCta}</td></tr>
         ${makeBannerHtml(1)}
+        ${makeBadgesHtml(1)}
         ${disclaimerHtml}
       </table>
     `;
@@ -501,6 +525,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
           </td>
         </tr>
         ${makeBannerHtml(horizCols)}
+        ${makeBadgesHtml(horizCols)}
         ${disclaimerHtml}
       </table>
     `;

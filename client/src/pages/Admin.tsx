@@ -1039,7 +1039,7 @@ function BrandEditor({
     ["layout", "Layout"],
     ["colors", "Colors"],
     ["type", "Typography"],
-    ["logo", "Photo, logo & banners"],
+    ["logo", "Photo, logo, banner & badges"],
     ["contact", "Contact rows"],
     ["social", "Social"],
     ["company", "Company details"],
@@ -1420,6 +1420,113 @@ function BrandEditor({
                     data-testid="input-bannerHref"
                   />
                 </Field>
+                </div>
+              </div>
+
+              {/* --- Certification badges --- */}
+              <div className="pt-4 border-t border-border">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Certification badges
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Small 1:1 squares shown under the banner — ISO, ACS, industry
+                  accreditations, member logos, awards. Up to 6.
+                </p>
+                <div className="space-y-4">
+                  <Field label={`Badge size: ${local.certBadgeSize}px`}>
+                    <Slider
+                      min={32}
+                      max={96}
+                      step={2}
+                      value={[local.certBadgeSize]}
+                      onValueChange={(v) => update("certBadgeSize", v[0])}
+                      data-testid="slider-certBadgeSize"
+                    />
+                  </Field>
+                  <div className="space-y-3">
+                    {(local.certBadges || []).map((badge, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-md border border-border p-3 space-y-3"
+                        data-testid={`row-cert-badge-${idx}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            Badge {idx + 1}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...(local.certBadges || [])];
+                              next.splice(idx, 1);
+                              update("certBadges", next);
+                            }}
+                            className="text-xs text-destructive hover:underline"
+                            data-testid={`button-remove-cert-badge-${idx}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <Field label="Badge image (square)">
+                          <ImageUploader
+                            value={badge.url}
+                            onChange={(v) => {
+                              const next = [...(local.certBadges || [])];
+                              next[idx] = { ...next[idx], url: v };
+                              update("certBadges", next);
+                            }}
+                            placeholder="Paste image URL or upload"
+                            aspect={1}
+                          />
+                        </Field>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Field label="Alt text">
+                            <Input
+                              value={badge.alt || ""}
+                              onChange={(e) => {
+                                const next = [...(local.certBadges || [])];
+                                next[idx] = {
+                                  ...next[idx],
+                                  alt: e.target.value,
+                                };
+                                update("certBadges", next);
+                              }}
+                              placeholder="ISO 9001 certified"
+                            />
+                          </Field>
+                          <Field label="Link (optional)">
+                            <Input
+                              value={badge.href || ""}
+                              onChange={(e) => {
+                                const next = [...(local.certBadges || [])];
+                                next[idx] = {
+                                  ...next[idx],
+                                  href: e.target.value,
+                                };
+                                update("certBadges", next);
+                              }}
+                              placeholder="iso.org/9001"
+                            />
+                          </Field>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {(local.certBadges || []).length < 6 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        update("certBadges", [
+                          ...(local.certBadges || []),
+                          { url: "", alt: "", href: "" },
+                        ])
+                      }
+                      data-testid="button-add-cert-badge"
+                    >
+                      + Add certification badge
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

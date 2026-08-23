@@ -209,6 +209,21 @@ export const brandConfigSchema = z.object({
   bannerWidth: z.number().min(120).max(720).default(520),
   bannerHref: z.string().default(""),
 
+  // Optional 1:1 certification / accreditation badges rendered as a small row
+  // beneath the banner. Up to 6 badges. Each badge is a square image plus an
+  // optional link target and alt text ("ISO 9001 certified" etc).
+  certBadges: z
+    .array(
+      z.object({
+        url: z.string(),
+        alt: z.string().default(""),
+        href: z.string().default(""),
+      })
+    )
+    .max(6)
+    .default([]),
+  certBadgeSize: z.number().int().min(32).max(96).default(56),
+
   // Colors (hex)
   primaryColor: z.string().default("#0f766e"), // headings + name
   textColor: z.string().default("#111827"),
