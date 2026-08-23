@@ -518,7 +518,7 @@ function StaffDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -955,7 +955,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function FieldRow({ children }: { children: React.ReactNode }) {
-  return <div className="flex gap-3">{children}</div>;
+  // Stacks on mobile so two inputs don't blow past the viewport width.
+  return <div className="flex flex-col sm:flex-row gap-3">{children}</div>;
 }
 
 // ---------- Brand editor ----------

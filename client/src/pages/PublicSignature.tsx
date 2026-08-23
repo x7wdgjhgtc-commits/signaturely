@@ -45,7 +45,6 @@ export default function PublicSignature() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b border-border bg-card">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-2">
-          <Logo />
           <span className="font-serif text-lg">Signaturely</span>
           <span className="text-xs text-muted-foreground ml-2">
             for {company.name}
@@ -68,6 +67,7 @@ export default function PublicSignature() {
 
         <div className="grid md:grid-cols-3 gap-4">
           <SetupCard
+            logo="/mail-logos/outlook.png"
             title="Outlook"
             steps={[
               "File → Options → Mail → Signatures",
@@ -76,6 +76,7 @@ export default function PublicSignature() {
             ]}
           />
           <SetupCard
+            logo="/mail-logos/gmail.png"
             title="Gmail"
             steps={[
               "Settings (gear) → See all settings",
@@ -84,6 +85,7 @@ export default function PublicSignature() {
             ]}
           />
           <SetupCard
+            logo="/mail-logos/apple-mail.png"
             title="Apple Mail"
             steps={[
               "Mail → Settings → Signatures",
@@ -101,31 +103,25 @@ export default function PublicSignature() {
   );
 }
 
-function SetupCard({ title, steps }: { title: string; steps: string[] }) {
+function SetupCard({ logo, title, steps }: { logo?: string; title: string; steps: string[] }) {
   return (
     <div className="bg-card border border-card-border rounded-xl p-4">
-      <div className="font-semibold mb-2">{title}</div>
+      <div className="flex items-center gap-2 mb-2">
+        {logo && (
+          <img
+            src={logo}
+            alt={`${title} logo`}
+            className="w-6 h-6 object-contain"
+            loading="lazy"
+          />
+        )}
+        <div className="font-semibold">{title}</div>
+      </div>
       <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
         {steps.map((s, i) => (
           <li key={i}>{s}</li>
         ))}
       </ol>
     </div>
-  );
-}
-
-function Logo() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-      <rect width="32" height="32" rx="8" className="fill-primary" />
-      <path
-        d="M8 22 L14 10 L18 18 L24 12"
-        stroke="white"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

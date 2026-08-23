@@ -41,9 +41,14 @@ export function SignaturePreview({
   const outerRef = useRef<HTMLDivElement>(null); // scroll/padded container
   const layerRef = useRef<HTMLDivElement>(null); // absolute positioning parent (same rect as outer)
   const previewRef = useRef<HTMLDivElement>(null); // HTML content
+  const scaleWrapRef = useRef<HTMLDivElement>(null); // fixed-height wrapper that gets scale-adjusted
   const [copied, setCopied] = useState(false);
   const [showHtml, setShowHtml] = useState(false);
+  const [scale, setScale] = useState(1);
   const { toast } = useToast();
+
+  // Natural (unscaled) width of the signature content. Matches min-width below.
+  const NATURAL_WIDTH = 560;
 
   const html = useMemo(() => renderSignatureHtml({ brand, staff, plan }), [brand, staff, plan]);
   const plain = useMemo(() => renderSignaturePlain({ brand, staff, plan }), [brand, staff, plan]);
@@ -87,32 +92,63 @@ export function SignaturePreview({
     setHandles(next);
   };
 
-  // Re-measure whenever the html changes or state props affecting sizes update.
+  // Fit the signature inside its container by scaling it down when the viewport
+  // is narrower than the natural (email-client) width. Never scale up.
+  const fit = () => {
+    const outer = outerRef.current;
+    const layer = layerRef.current;
+    const wrap = scaleWrapRef.current;
+    if (!outer || !layer || !wrap) return;
+    // Available width excludes outer padding (p-4/p-6 handled by clientWidth of
+    // outer's inner box — we measure clientWidth on outer directly since padding
+    // reduces it).
+    const cs = window.getComputedStyle(outer);
+    const padX =
+      parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+    const available = Math.max(0, outer.clientWidth - padX);
+    const naturalW = Math.max(layer.scrollWidth, NATURAL_WIDTH);
+    const s = Math.min(1, available / naturalW);
+    setScale(s);
+    // Set the wrapper's height so it consumes the visually-scaled height.
+    const naturalH = layer.offsetHeight;
+    wrap.style.height = `${Math.ceil(naturalH * s)}px`;
+  };
+
+  // Re-measure and refit whenever the html changes or size props update.
   useLayoutEffect(() => {
-    // measure immediately, then again after images load (which changes dimensions)
-    measure();
+    const run = () => {
+      fit();
+      measure();
+    };
+    run();
     const preview = previewRef.current;
     if (!preview) return;
     const imgs = Array.from(preview.querySelectorAll("img"));
-    const trigger = () => measure();
     imgs.forEach((img) => {
       if (img.complete) return;
-      img.addEventListener("load", trigger);
-      img.addEventListener("error", trigger);
+      img.addEventListener("load", run);
+      img.addEventListener("error", run);
     });
+    // Retry a few times because in-app WebViews sometimes report 0 layout
+    // dimensions on the first paint.
+    const timers = [100, 300, 700, 1500].map((ms) => window.setTimeout(run, ms));
     return () => {
       imgs.forEach((img) => {
-        img.removeEventListener("load", trigger);
-        img.removeEventListener("error", trigger);
+        img.removeEventListener("load", run);
+        img.removeEventListener("error", run);
       });
+      timers.forEach((t) => window.clearTimeout(t));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, brand.logoWidth, brand.bannerWidth, brand.photoSize]);
 
-  // Re-measure on any size change of the container.
+  // Re-fit + re-measure on any size change of the container.
   useEffect(() => {
     if (!outerRef.current) return;
-    const ro = new ResizeObserver(() => measure());
+    const ro = new ResizeObserver(() => {
+      fit();
+      measure();
+    });
     ro.observe(outerRef.current);
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,6 +167,9 @@ export function SignaturePreview({
         ? brand.bannerWidth
         : brand.photoSize;
     const startX = e.clientX;
+    // Drag deltas are in screen pixels — divide by the current display scale so
+    // one pixel of finger movement equals one pixel of natural-size change.
+    const activeScale = scale || 1;
 
     const min = kind === "photo" ? 48 : kind === "logo" ? 40 : 120;
     const max = kind === "photo" ? 140 : kind === "logo" ? 400 : 720;
@@ -139,7 +178,7 @@ export function SignaturePreview({
     document.body.style.userSelect = "none";
 
     const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - startX;
+      const dx = (ev.clientX - startX) / activeScale;
       const next = Math.round(Math.min(max, Math.max(min, startVal + dx)));
       if (kind === "logo") onResizeLogo?.(next);
       else if (kind === "banner") onResizeBanner?.(next);
@@ -201,32 +240,40 @@ export function SignaturePreview({
     <div className="space-y-3">
       <div
         ref={outerRef}
-        className="relative border border-border rounded-lg bg-white p-6 overflow-x-auto max-w-full"
+        className="relative border border-border rounded-lg bg-white p-4 sm:p-6 overflow-hidden max-w-full"
       >
-        {/* Absolute-positioning parent that shares the same origin as previewRef.
-            Because it's inside outerRef with `p-6`, we position it at inset-0 minus padding by
-            wrapping preview + handles together.
-
-            The inline min-width keeps the email-client table from squishing on
-            narrow viewports — the outer wrapper's `overflow-x-auto max-w-full`
-            gives the block its own horizontal scrollbar without breaking the
-            surrounding page layout. */}
-        <div ref={layerRef} className="relative" style={{ minWidth: 520, width: "max-content" }}>
+        {/* Scale wrapper: takes on the *visual* scaled height so the page
+            layout below never gets pushed by the natural (unscaled) content.
+            The natural-size layer inside is transformed with scale + top-left
+            origin. Resize handles live inside the layer and inherit the
+            transform for free. */}
+        <div ref={scaleWrapRef} className="relative w-full overflow-hidden">
           <div
-            ref={previewRef}
-            dangerouslySetInnerHTML={{ __html: html }}
-            data-testid="signature-preview"
-          />
-          {showHandles &&
-            handles.map((h, i) => (
-              <div
-                key={`${h.kind}-${i}`}
-                onPointerDown={(e) => startDrag(h.kind, e)}
-                title={`Drag to resize ${h.kind}`}
-                className="absolute z-10 w-5 h-5 -ml-2.5 -mt-2.5 rounded-sm bg-primary border-2 border-white shadow-md cursor-nwse-resize hover:scale-125 active:scale-125 transition-transform touch-none"
-                style={{ left: h.x, top: h.y }}
-              />
-            ))}
+            ref={layerRef}
+            className="relative"
+            style={{
+              minWidth: NATURAL_WIDTH,
+              width: "max-content",
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+          >
+            <div
+              ref={previewRef}
+              dangerouslySetInnerHTML={{ __html: html }}
+              data-testid="signature-preview"
+            />
+            {showHandles &&
+              handles.map((h, i) => (
+                <div
+                  key={`${h.kind}-${i}`}
+                  onPointerDown={(e) => startDrag(h.kind, e)}
+                  title={`Drag to resize ${h.kind}`}
+                  className="absolute z-10 w-5 h-5 -ml-2.5 -mt-2.5 rounded-sm bg-primary border-2 border-white shadow-md cursor-nwse-resize hover:scale-125 active:scale-125 transition-transform touch-none"
+                  style={{ left: h.x, top: h.y }}
+                />
+              ))}
+          </div>
         </div>
       </div>
 
