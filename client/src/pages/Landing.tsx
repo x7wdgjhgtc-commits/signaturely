@@ -105,7 +105,7 @@ function Hero() {
   return (
     <section className="relative bg-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 md:grid-cols-2 md:py-28">
-        <div>
+        <div className="min-w-0">
           <Badge className="mb-4 bg-teal-50 text-teal-800 hover:bg-teal-50">
             <Sparkles className="mr-1 h-3 w-3" /> New: 8 layouts, unlimited banners
           </Badge>
@@ -129,7 +129,9 @@ function Hero() {
             No credit card. Cancel anytime. Australian owned.
           </p>
         </div>
-        <HeroPreview />
+        <div className="min-w-0">
+          <HeroPreview />
+        </div>
       </div>
     </section>
   );
