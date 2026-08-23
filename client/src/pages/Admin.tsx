@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -50,6 +51,9 @@ import {
   Send,
   Check,
   X as XIcon,
+  Upload,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import type { StaffInvite } from "@shared/schema";
@@ -98,6 +102,7 @@ export default function Admin() {
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [invitesOpen, setInvitesOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const staffQuery = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -131,17 +136,19 @@ export default function Admin() {
             <span className="text-base sm:text-lg font-semibold tracking-tight text-slate-900 shrink-0">Signaturely</span>
             <div className="border-l border-slate-200 pl-3 sm:pl-4 min-w-0">
               <div className="text-sm font-semibold truncate">{company.name}</div>
-              <div className="text-xs text-muted-foreground font-mono truncate">
+              <div className="hidden sm:block text-xs text-muted-foreground font-mono truncate">
                 /{company.slug}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
-            <PlanBadge
-              plan={company.plan}
-              status={company.subscriptionStatus}
-              trialEndsAt={company.trialEndsAt}
-            />
+            <div className="hidden sm:block">
+              <PlanBadge
+                plan={company.plan}
+                status={company.subscriptionStatus}
+                trialEndsAt={company.trialEndsAt}
+              />
+            </div>
             <Link href="/pricing">
               <Button
                 size="sm"
@@ -222,6 +229,14 @@ export default function Admin() {
                   <Send className="w-4 h-4" /> Invite link
                 </Button>
                 <Button
+                  variant="outline"
+                  onClick={() => setImportOpen(true)}
+                  data-testid="button-import-staff"
+                  className="gap-2"
+                >
+                  <Upload className="w-4 h-4" /> Import CSV
+                </Button>
+                <Button
                   onClick={() => setNewOpen(true)}
                   data-testid="button-new-staff"
                   className="gap-2"
@@ -297,6 +312,9 @@ export default function Admin() {
 
       {/* Invite links dialog */}
       <InvitesDialog open={invitesOpen} onOpenChange={setInvitesOpen} />
+
+      {/* CSV import dialog */}
+      <ImportCsvDialog open={importOpen} onOpenChange={setImportOpen} />
 
       {/* New staff dialog */}
       <StaffDialog
@@ -2339,5 +2357,170 @@ function PlanBadge({
         </span>
       )}
     </div>
+  );
+}
+
+// Bulk staff import — admins download a CSV template, fill it in with their
+// team, then re-upload. Matches on email so re-imports update existing rows
+// instead of duplicating. All heavy lifting is on the server
+// (POST /api/staff/import); this dialog is just a thin file-picker + result
+// summary.
+type ImportResult = {
+  created: number;
+  updated: number;
+  skipped: { row: number; reason: string }[];
+  cap: number;
+  total: number;
+};
+
+function ImportCsvDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+
+  // Reset local state whenever the dialog is reopened so users don't see the
+  // previous run's summary bleed into a fresh import.
+  useEffect(() => {
+    if (open) {
+      setFile(null);
+      setResult(null);
+    }
+  }, [open]);
+
+  const importMutation = useMutation({
+    mutationFn: async (csv: string) => {
+      const r = await apiRequest("POST", "/api/staff/import", { csv });
+      return (await r.json()) as ImportResult;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+      toast({
+        title: `Imported ${data.created + data.updated} staff`,
+        description:
+          data.skipped.length > 0
+            ? `${data.created} added, ${data.updated} updated, ${data.skipped.length} skipped.`
+            : `${data.created} added, ${data.updated} updated.`,
+      });
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Import failed",
+        description: e?.message ?? "Please check the CSV and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleImport = async () => {
+    if (!file) return;
+    const csv = await file.text();
+    importMutation.mutate(csv);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5" /> Import staff from CSV
+          </DialogTitle>
+          <DialogDescription>
+            Download the template, fill it in with your team, then upload. Rows
+            that match an existing email will update that staff member; new
+            emails create new rows.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          <div className="rounded-lg border border-border bg-muted/30 p-3 sm:p-4">
+            <div className="text-sm font-medium mb-1">1. Download template</div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Includes an example row and every supported column.
+            </p>
+            <a
+              href="/api/staff/csv-template"
+              download="signaturely-staff-template.csv"
+              className="inline-flex"
+            >
+              <Button variant="outline" size="sm" className="gap-2" data-testid="button-download-template">
+                <Download className="w-4 h-4" /> signaturely-staff-template.csv
+              </Button>
+            </a>
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3 sm:p-4">
+            <div className="text-sm font-medium mb-1">2. Upload filled file</div>
+            <p className="text-xs text-muted-foreground mb-3">
+              CSV only. Header row must stay on line 1.
+            </p>
+            <label className="block">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-teal-800"
+                data-testid="input-csv-file"
+              />
+            </label>
+            {file && (
+              <div className="mt-2 text-xs text-muted-foreground truncate">
+                Selected: {file.name} ({Math.round(file.size / 1024)} KB)
+              </div>
+            )}
+          </div>
+
+          {result && (
+            <div className="rounded-lg border border-border bg-background p-3 sm:p-4 space-y-2">
+              <div className="text-sm font-medium">Import summary</div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <span className="text-emerald-700">Added: {result.created}</span>
+                <span className="text-slate-700">Updated: {result.updated}</span>
+                <span className="text-amber-700">
+                  Skipped: {result.skipped.length}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Workspace now has {result.total} / {result.cap} seats used.
+              </div>
+              {result.skipped.length > 0 && (
+                <ul className="text-xs text-amber-700 list-disc pl-5 space-y-0.5 max-h-40 overflow-y-auto">
+                  {result.skipped.map((s, i) => (
+                    <li key={i}>
+                      Row {s.row}: {s.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="mt-4 flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="w-full sm:w-auto"
+          >
+            {result ? "Done" : "Cancel"}
+          </Button>
+          <Button
+            onClick={handleImport}
+            disabled={!file || importMutation.isPending}
+            className="w-full sm:w-auto gap-2 bg-teal-700 hover:bg-teal-800"
+            data-testid="button-run-import"
+          >
+            <Upload className="w-4 h-4" />
+            {importMutation.isPending ? "Importing…" : "Import staff"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

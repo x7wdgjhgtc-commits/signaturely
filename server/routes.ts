@@ -399,6 +399,218 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
+  // --- Staff CSV template + import ---
+  // Columns match InsertStaff so admins can bulk-onboard by editing the
+  // template in Excel/Numbers/Sheets and re-uploading it. Rows are matched to
+  // existing staff by email (case-insensitive) — unmatched rows are created,
+  // matched rows are updated. Blank lines are skipped.
+  const STAFF_CSV_COLUMNS: (keyof import("@shared/schema").InsertStaff)[] = [
+    "fullName",
+    "jobTitle",
+    "department",
+    "email",
+    "phone",
+    "mobile",
+    "website",
+    "address",
+    "pronouns",
+    "bookingUrl",
+    "photoUrl",
+    "linkedin",
+    "twitter",
+    "instagram",
+    "facebook",
+  ];
+
+  app.get("/api/staff/csv-template", requireAuth, (_req, res) => {
+    const header = STAFF_CSV_COLUMNS.join(",");
+    const example = [
+      "Jane Doe",
+      "Head of Marketing",
+      "Marketing",
+      "jane@example.com",
+      "+1 555 123 4567",
+      "+1 555 987 6543",
+      "example.com/jane",
+      "123 Main St, Brisbane QLD",
+      "she/her",
+      "cal.com/jane",
+      "",
+      "linkedin.com/in/janedoe",
+      "janedoe",
+      "jane.doe",
+      "janedoefb",
+    ]
+      .map((v) => (v.includes(",") ? `"${v.replace(/"/g, '""')}"` : v))
+      .join(",");
+    const body = `${header}\n${example}\n`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="signaturely-staff-template.csv"',
+    );
+    res.send(body);
+  });
+
+  // RFC4180-ish CSV parser. Handles quoted fields, doubled-quote escapes, and
+  // both LF/CRLF line endings. Returns an array of row objects keyed by the
+  // first (header) row.
+  function parseCsv(input: string): Record<string, string>[] {
+    const text = input.replace(/^\uFEFF/, ""); // strip UTF-8 BOM
+    const rows: string[][] = [];
+    let cur: string[] = [];
+    let field = "";
+    let i = 0;
+    let inQuotes = false;
+    while (i < text.length) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i += 1;
+          continue;
+        }
+        field += c;
+        i += 1;
+        continue;
+      }
+      if (c === '"') {
+        inQuotes = true;
+        i += 1;
+        continue;
+      }
+      if (c === ",") {
+        cur.push(field);
+        field = "";
+        i += 1;
+        continue;
+      }
+      if (c === "\r") {
+        // swallow \r; \n handles the row break
+        i += 1;
+        continue;
+      }
+      if (c === "\n") {
+        cur.push(field);
+        rows.push(cur);
+        cur = [];
+        field = "";
+        i += 1;
+        continue;
+      }
+      field += c;
+      i += 1;
+    }
+    // flush trailing field / row
+    if (field.length > 0 || cur.length > 0) {
+      cur.push(field);
+      rows.push(cur);
+    }
+    if (rows.length === 0) return [];
+    const header = rows[0].map((h) => h.trim());
+    return rows.slice(1).map((r) => {
+      const obj: Record<string, string> = {};
+      header.forEach((h, idx) => {
+        obj[h] = (r[idx] ?? "").trim();
+      });
+      return obj;
+    });
+  }
+
+  app.post("/api/staff/import", requireAuth, async (req, res) => {
+    const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
+    if (!csv.trim()) {
+      return res.status(400).json({ message: "Empty CSV payload" });
+    }
+    let parsed: Record<string, string>[];
+    try {
+      parsed = parseCsv(csv);
+    } catch (e: any) {
+      return res.status(400).json({ message: `Could not parse CSV: ${e.message}` });
+    }
+    if (parsed.length === 0) {
+      return res.status(400).json({ message: "CSV contains no data rows" });
+    }
+
+    const company = await storage.getCompany(req.session.companyId!);
+    if (!company) return res.status(404).json({ message: "Workspace not found" });
+    const existing = await storage.listStaff(company.id);
+    const byEmail = new Map(
+      existing
+        .filter((s) => s.email)
+        .map((s) => [s.email.toLowerCase(), s] as const),
+    );
+    const cap = PLANS[(company.plan as PlanId) ?? "free"]?.seatCap ?? 1;
+    if (!isEntitled(company)) {
+      return res.status(402).json({
+        message: "Your subscription isn't active. Reactivate to import staff.",
+        code: "subscription_inactive",
+      });
+    }
+
+    const created: Staff[] = [];
+    const updated: Staff[] = [];
+    const skipped: { row: number; reason: string }[] = [];
+
+    for (let idx = 0; idx < parsed.length; idx++) {
+      const raw = parsed[idx];
+      // Skip visually-blank rows (all whitespace)
+      const anyValue = Object.values(raw).some((v) => v && v.trim().length);
+      if (!anyValue) continue;
+      const rowNum = idx + 2; // header is row 1, first data row is 2
+
+      // Map CSV columns → InsertStaff. Only include known columns; ignore extras.
+      const record: Partial<import("@shared/schema").InsertStaff> = {};
+      for (const col of STAFF_CSV_COLUMNS) {
+        if (raw[col] !== undefined) record[col] = raw[col];
+      }
+      const name = (record.fullName || "").trim();
+      if (!name) {
+        skipped.push({ row: rowNum, reason: "Missing fullName" });
+        continue;
+      }
+
+      const emailKey = (record.email || "").trim().toLowerCase();
+      const match = emailKey ? byEmail.get(emailKey) : undefined;
+      if (match) {
+        const row = await storage.updateStaff(company.id, match.id, record);
+        if (row) updated.push(row);
+        continue;
+      }
+
+      // New row — respect seat cap.
+      if (existing.length + created.length >= cap) {
+        skipped.push({
+          row: rowNum,
+          reason: `Seat cap reached (${cap} on ${company.plan} plan)`,
+        });
+        continue;
+      }
+      try {
+        const row = await storage.createStaff(
+          company.id,
+          record as import("@shared/schema").InsertStaff,
+        );
+        created.push(row);
+      } catch (e: any) {
+        skipped.push({ row: rowNum, reason: e?.message ?? "Insert failed" });
+      }
+    }
+
+    res.json({
+      created: created.length,
+      updated: updated.length,
+      skipped,
+      cap,
+      total: existing.length + created.length,
+    });
+  });
+
   // --- Staff invites (auth) ---
   // Admins mint a shareable single-use link that lets the recipient add
   // themselves as a staff member without needing a login.
