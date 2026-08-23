@@ -103,15 +103,18 @@ export function SignaturePreview({
     const layer = layerRef.current;
     const wrap = scaleWrapRef.current;
     if (!outer || !layer || !wrap) return scale;
-    // Available width = outer's content-box width (clientWidth already excludes
-    // padding), minus a tiny slack for sub-pixel rounding.
-    const available = Math.max(0, outer.clientWidth - 1);
+    // Available width = scaleWrap's own content-box width (it's the tightest
+    // constraint; outer has padding so scaleWrap.clientWidth < outer.clientWidth).
+    // Subtract a 12px safety margin so resize handles (which stick 10px out of
+    // their anchor image via -ml-2.5) don't get clipped by the wrap edge.
+    const available = Math.max(0, wrap.clientWidth - 12);
     const naturalW = Math.max(layer.scrollWidth, NATURAL_WIDTH);
     const s = Math.min(1, available / naturalW);
     setScale(s);
-    // Set the wrapper's height so it consumes the visually-scaled height.
+    // Set the wrapper's height so it consumes the visually-scaled height, plus
+    // a small overflow allowance for handles that sit just past image bottom.
     const naturalH = layer.offsetHeight;
-    wrap.style.height = `${Math.ceil(naturalH * s)}px`;
+    wrap.style.height = `${Math.ceil(naturalH * s) + 6}px`;
     return s;
   };
 
@@ -248,7 +251,10 @@ export function SignaturePreview({
             The natural-size layer inside is transformed with scale + top-left
             origin. Resize handles live inside the layer and inherit the
             transform for free. */}
-        <div ref={scaleWrapRef} className="relative w-full overflow-hidden">
+        {/* NOTE: overflow-visible so resize handles that anchor at the image
+            edge stay visible (they extend ~10px past their anchor). Vertical
+            overflow is bounded by the height we set in fit(). */}
+        <div ref={scaleWrapRef} className="relative w-full">
           <div
             ref={layerRef}
             className="relative"
