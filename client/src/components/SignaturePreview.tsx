@@ -55,15 +55,17 @@ export function SignaturePreview({
 
   const [handles, setHandles] = useState<Handle[]>([]);
 
-  // Locate resize targets and cache the current handle positions.
-  const measure = () => {
+  // Locate resize targets and cache the current handle positions in the
+  // layer's *natural* (unscaled) coordinate system. Handles live inside the
+  // scaled layer, so their `left`/`top` values must be in pre-transform coords
+  // — dividing by the active scale converts screen-space rects back.
+  const measure = (currentScale: number) => {
     const preview = previewRef.current;
     const layer = layerRef.current;
     if (!preview || !layer) return;
 
+    const s = currentScale || 1;
     const layerRect = layer.getBoundingClientRect();
-    const scrollLeft = outerRef.current?.scrollLeft ?? 0;
-    const scrollTop = outerRef.current?.scrollTop ?? 0;
 
     const imgs = Array.from(preview.querySelectorAll("img"));
     const next: Handle[] = [];
@@ -83,10 +85,11 @@ export function SignaturePreview({
         kind = "photo";
       if (!kind) return;
       const r = img.getBoundingClientRect();
+      // Screen-space delta from layer's top-left → natural coords via /s.
       next.push({
         kind,
-        x: r.right - layerRect.left + scrollLeft,
-        y: r.bottom - layerRect.top + scrollTop,
+        x: (r.right - layerRect.left) / s,
+        y: (r.bottom - layerRect.top) / s,
       });
     });
     setHandles(next);
@@ -94,31 +97,29 @@ export function SignaturePreview({
 
   // Fit the signature inside its container by scaling it down when the viewport
   // is narrower than the natural (email-client) width. Never scale up.
-  const fit = () => {
+  // Returns the scale that was applied so callers can measure with it.
+  const fit = (): number => {
     const outer = outerRef.current;
     const layer = layerRef.current;
     const wrap = scaleWrapRef.current;
-    if (!outer || !layer || !wrap) return;
-    // Available width excludes outer padding (p-4/p-6 handled by clientWidth of
-    // outer's inner box — we measure clientWidth on outer directly since padding
-    // reduces it).
-    const cs = window.getComputedStyle(outer);
-    const padX =
-      parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
-    const available = Math.max(0, outer.clientWidth - padX);
+    if (!outer || !layer || !wrap) return scale;
+    // Available width = outer's content-box width (clientWidth already excludes
+    // padding), minus a tiny slack for sub-pixel rounding.
+    const available = Math.max(0, outer.clientWidth - 1);
     const naturalW = Math.max(layer.scrollWidth, NATURAL_WIDTH);
     const s = Math.min(1, available / naturalW);
     setScale(s);
     // Set the wrapper's height so it consumes the visually-scaled height.
     const naturalH = layer.offsetHeight;
     wrap.style.height = `${Math.ceil(naturalH * s)}px`;
+    return s;
   };
 
   // Re-measure and refit whenever the html changes or size props update.
   useLayoutEffect(() => {
     const run = () => {
-      fit();
-      measure();
+      const s = fit();
+      measure(s);
     };
     run();
     const preview = previewRef.current;
@@ -146,8 +147,8 @@ export function SignaturePreview({
   useEffect(() => {
     if (!outerRef.current) return;
     const ro = new ResizeObserver(() => {
-      fit();
-      measure();
+      const s = fit();
+      measure(s);
     });
     ro.observe(outerRef.current);
     return () => ro.disconnect();
