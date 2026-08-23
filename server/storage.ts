@@ -12,13 +12,27 @@ import Database from "better-sqlite3";
 import { eq, and, asc, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { dirname } from "node:path";
 
-// On Render we mount a persistent disk at DATA_DIR (see render.yaml). Locally
-// we fall back to the working directory so `npm run dev` “just works”.
-const DATA_DIR = process.env.DATA_DIR || ".";
-const DB_PATH = process.env.DATABASE_PATH || `${DATA_DIR}/data.db`;
+// On Render we mount a persistent disk at DATA_DIR (see render.yaml). If the
+// mount is missing (e.g. disk not yet attached) we degrade to a writable
+// ephemeral path so the service still boots — clearly logged so operators
+// notice. Locally the default resolves to the working directory.
+function pickDbPath(): string {
+  const explicit = process.env.DATABASE_PATH;
+  if (explicit) return explicit;
+  const configured = process.env.DATA_DIR;
+  if (configured) {
+    if (existsSync(configured)) return `${configured}/data.db`;
+    console.warn(
+      `[storage] DATA_DIR=${configured} does not exist — falling back to ephemeral /tmp/data.db. Attach a Render disk mounted at ${configured} to persist data across deploys.`
+    );
+    return "/tmp/data.db";
+  }
+  return "./data.db";
+}
+const DB_PATH = pickDbPath();
 try { mkdirSync(dirname(DB_PATH), { recursive: true }); } catch {}
 console.log(`[storage] SQLite at ${DB_PATH}`);
 

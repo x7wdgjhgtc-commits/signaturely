@@ -198,6 +198,12 @@ export async function registerRoutes(
     res.json(publicCompany(company));
   });
 
+  // --- Health check (public, unauth) ---
+  // Used by Render for health probes and by anyone verifying the service is up.
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true, ts: new Date().toISOString() });
+  });
+
   // --- Plans (public) ---
   // Static pricing catalog. Server renders it so pricing lives in one place.
   app.get("/api/plans", (_req, res) => {
