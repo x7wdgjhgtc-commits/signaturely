@@ -1016,23 +1016,63 @@ function BrandEditor({
     | "disclaimer"
   >("layout");
 
+  const SECTIONS = [
+    ["layout", "Layout"],
+    ["colors", "Colors"],
+    ["type", "Typography"],
+    ["logo", "Logo & banner"],
+    ["contact", "Contact rows"],
+    ["social", "Social"],
+    ["company", "Company details"],
+    ["cta", "Call to action"],
+    ["disclaimer", "Disclaimer"],
+  ] as const;
+
   return (
-    <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.1fr)] gap-6 items-start">
-      {/* Section rail */}
-      <nav className="lg:sticky lg:top-20 space-y-1">
-        {(
-          [
-            ["layout", "Layout"],
-            ["colors", "Colors"],
-            ["type", "Typography"],
-            ["logo", "Logo & banner"],
-            ["contact", "Contact rows"],
-            ["social", "Social"],
-            ["company", "Company details"],
-            ["cta", "Call to action"],
-            ["disclaimer", "Disclaimer"],
-          ] as const
-        ).map(([id, label]) => (
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start">
+      {/* MOBILE: preview at the top so users see their changes without
+          scrolling. Hidden on desktop — desktop uses the sticky preview
+          on the right. */}
+      <div className="lg:hidden order-1">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          Preview — using {exampleStaff.fullName}
+        </div>
+        <div className="rounded-xl border border-card-border bg-card p-4 shadow-sm overflow-x-auto">
+          <SignaturePreview
+            brand={local}
+            staff={exampleStaff}
+            showCopy={false}
+            plan={company?.plan}
+            onResizeLogo={(px) => update("logoWidth", px)}
+            onResizeBanner={(px) => update("bannerWidth", px)}
+            onResizePhoto={(px) => update("photoSize", px)}
+          />
+        </div>
+      </div>
+
+      {/* MOBILE: section dropdown — replaces the vertical rail so the
+          selected section's inputs get all the horizontal space. */}
+      <div className="lg:hidden order-2">
+        <label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
+          Edit section
+        </label>
+        <select
+          value={section}
+          onChange={(e) => setSection(e.target.value as typeof section)}
+          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          data-testid="select-brand-section"
+        >
+          {SECTIONS.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* DESKTOP: section rail. Hidden below `lg`. */}
+      <nav className="hidden lg:block lg:sticky lg:top-20 space-y-1 order-3 lg:order-none">
+        {SECTIONS.map(([id, label]) => (
           <button
             key={id}
             onClick={() => setSection(id)}
@@ -1062,10 +1102,10 @@ function BrandEditor({
         </div>
       </nav>
 
-      {/* Editor panel */}
-      <div className="min-w-0">
-        <h2 className="font-serif text-xl mb-1">Signature template</h2>
-        <p className="text-sm text-muted-foreground mb-5">
+      {/* Editor panel (fields for the selected section). */}
+      <div className="min-w-0 order-3 lg:order-none">
+        <h2 className="font-serif text-xl mb-1 hidden lg:block">Signature template</h2>
+        <p className="text-sm text-muted-foreground mb-5 hidden lg:block">
           These settings apply to every staff signature.
         </p>
 
@@ -1491,8 +1531,26 @@ function BrandEditor({
         </div>
       </div>
 
-      {/* Sticky live preview */}
-      <div className="lg:sticky lg:top-20 min-w-0">
+      {/* MOBILE: save button below inputs (matches natural top-to-bottom
+          flow of the phone layout). Hidden on desktop — desktop shows Save
+          under the section rail. */}
+      <div className="lg:hidden order-4">
+        <Button
+          onClick={save}
+          disabled={saving}
+          className="w-full"
+          data-testid="button-save-brand-mobile"
+        >
+          {saving ? "Saving…" : "Save template"}
+        </Button>
+        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+          Changes preview live. Save applies them to every staff signature.
+        </p>
+      </div>
+
+      {/* DESKTOP: sticky preview column. Hidden below `lg`; mobile uses the
+          top-of-page preview instead. */}
+      <div className="hidden lg:block lg:sticky lg:top-20 min-w-0 order-none">
         <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
           Preview — using {exampleStaff.fullName}
         </div>
