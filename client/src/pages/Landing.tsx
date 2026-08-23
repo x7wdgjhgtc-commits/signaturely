@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -73,7 +73,7 @@ function MarketingNav() {
           </Link>
           <Link href="/signup">
             <Button size="sm" className="bg-teal-700 hover:bg-teal-800">
-              Start free trial
+              Get started
             </Button>
           </Link>
         </div>
@@ -120,13 +120,13 @@ function Hero() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href="/signup">
               <Button size="lg" className="bg-teal-700 hover:bg-teal-800">
-                Start 14-day free trial
+                Get started
               </Button>
             </Link>
             <TryDemoButton />
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            No credit card. Cancel anytime. Australian owned.
+            Cancel anytime. Australian owned.
           </p>
         </div>
         <div className="min-w-0">
@@ -237,11 +237,53 @@ const HERO_STAFF: Staff = {
 };
 
 function HeroPreview() {
-  // On phone viewports the whole "email" card (message body + signature)
-  // scales down together so the fixed-pixel signature template fits without
-  // clipping. Desktop keeps 1:1 dimensions.
+  // The email card's inner content — including the signature — uses fixed
+  // pixel widths (email clients require this to render consistently). On
+  // phone viewports we render the card at its natural desktop width and
+  // then proportionally scale the whole thing down so it fits the viewport
+  // without clipping AND without any horizontal scrolling. A ResizeObserver
+  // keeps the outer wrapper the correct height at every scale factor.
+  const NATURAL_WIDTH = 600;               // px — desktop-natural card width
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [innerHeight, setInnerHeight] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+    const compute = () => {
+      const available = outer.clientWidth;
+      const next = available < NATURAL_WIDTH ? available / NATURAL_WIDTH : 1;
+      setScale(next);
+      setInnerHeight(inner.getBoundingClientRect().height * next);
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(outer);
+    ro.observe(inner);
+    window.addEventListener("resize", compute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", compute);
+    };
+  }, []);
+
   return (
-    <div className="hero-email-scale relative">
+    <div
+      ref={outerRef}
+      className="relative"
+      style={{ height: innerHeight ?? undefined }}
+    >
+      <div
+        ref={innerRef}
+        style={{
+          width: NATURAL_WIDTH,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
       <Card className="relative overflow-hidden border-slate-200 shadow-xl">
         <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-3 text-xs text-slate-500">
           To: board@apple.com &nbsp;·&nbsp; From: sjobs@apple.com
@@ -252,7 +294,7 @@ function HeroPreview() {
             A quick note before Monday's keynote — the final build ships tonight.
             Excited to show everyone what we've been working on.
           </div>
-          <div className="text-slate-500">Best,<br />Steve</div>
+          <div className="text-slate-500">Best,</div>
 
           {/* Real signature rendered by the production template engine.
               The template uses fixed pixel widths (as email clients require).
@@ -264,6 +306,7 @@ function HeroPreview() {
           </div>
         </CardContent>
       </Card>
+      </div>
       <Card className="absolute -bottom-6 -left-4 hidden border-slate-200 shadow-lg md:block">
         <CardContent className="flex items-center gap-3 p-4">
           <div className="rounded-full bg-teal-100 p-2 text-teal-700">
@@ -384,7 +427,7 @@ function HowItWorks() {
     {
       n: 1,
       title: "Create your workspace",
-      body: "Sign up in seconds and pick your workspace name. Trial starts on day one — no card needed.",
+      body: "Sign up in seconds and pick your workspace name. Free plan available with a light Signaturely watermark.",
     },
     {
       n: 2,
@@ -540,7 +583,7 @@ function Pricing() {
       <div className="mx-auto max-w-2xl text-center">
         <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">Simple, flat pricing.</h2>
         <p className="mt-3 text-slate-600">
-          One monthly price — no per-seat maths. All paid plans include a 14-day free trial. AUD, billed monthly.
+          One monthly price — no per-seat maths. Paid plans billed immediately. AUD, billed monthly.
         </p>
       </div>
       <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -613,10 +656,10 @@ export function PriceCard({
           variant={highlight ? "default" : "outline"}
           onClick={onSelect}
         >
-          {ctaLabel ?? (planId === "free" ? "Start free" : "Start free trial")}
+          {ctaLabel ?? (planId === "free" ? "Get started free" : `Choose ${p.name}`)}
         </Button>
         {variant === "marketing" && planId !== "free" && (
-          <p className="mt-2 text-center text-xs text-slate-400">14-day trial · no card</p>
+          <p className="mt-2 text-center text-xs text-slate-400">Billed A${p.price}/mo · cancel anytime</p>
         )}
       </CardContent>
     </Card>
@@ -637,7 +680,7 @@ function FinalCta() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup">
               <Button size="lg" className="bg-white text-teal-800 hover:bg-slate-100">
-                Start 14-day free trial
+                Get started
               </Button>
             </Link>
             <TryDemoButton />

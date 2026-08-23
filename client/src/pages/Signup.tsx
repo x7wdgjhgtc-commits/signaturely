@@ -10,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { PLANS } from "@shared/schema";
 import type { PlanId } from "@shared/schema";
 
-// Workspace signup — creates a workspace, hashes password server-side,
-// starts a 14-day trial, then hands the user to /admin or Stripe checkout.
+// Workspace signup — creates a workspace on the Free plan, hashes the
+// password server-side, then hands the user to /admin or Stripe checkout
+// (if they clicked a paid plan CTA).
 export default function Signup() {
   const [companyName, setCompanyName] = useState("");
   const [slug, setSlug] = useState("");
@@ -88,7 +89,7 @@ export default function Signup() {
       <div className="mx-auto max-w-md px-6 py-16">
         <h1 className="text-3xl font-semibold tracking-tight">Create your workspace</h1>
         <p className="mt-2 text-sm text-slate-600">
-          14 days free · no credit card · cancel anytime.
+          Free plan available. Paid plans billed monthly, cancel anytime.
         </p>
         <Card className="mt-8">
           <CardContent className="p-6">

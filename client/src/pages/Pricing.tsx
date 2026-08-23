@@ -87,7 +87,7 @@ export default function Pricing() {
             {company ? `Upgrade ${company.name}` : "Simple pricing."}
           </h1>
           <p className="mt-3 text-slate-600">
-            All plans include a 14-day free trial. Prices in AUD, billed monthly.
+            Paid plans billed immediately. Prices in AUD, billed monthly.
           </p>
           {company && (
             <div className="mt-4 text-sm">

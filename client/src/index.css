@@ -314,14 +314,4 @@
     inset: -1px;
   }
 
-  /* Landing hero: shrink the whole "email" card (message body + signature)
-     on phone viewports so the fixed-pixel signature template fits without
-     clipping. Uses `zoom` (rather than `transform: scale`) so the browser
-     reflows layout at the reduced size — no phantom whitespace below the
-     card. Desktop keeps 1:1. */
-  @media (max-width: 640px) {
-    .hero-email-scale {
-      zoom: 0.62;                   /* 375 / ≈605 (card natural width) */
-    }
-  }
 }
