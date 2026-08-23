@@ -59,8 +59,7 @@ function MarketingNav() {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-slate-900">
-          <LogoMark />
+        <Link href="/" className="font-semibold text-slate-900">
           <span className="text-lg tracking-tight">Signaturely</span>
         </Link>
         <nav className="hidden items-center gap-8 text-sm text-slate-600 md:flex">
@@ -83,9 +82,8 @@ function MarketingNav() {
   );
 }
 
-function LogoMark() {
-  // Simple wordmark glyph — bold "S" carved from a rounded square with a
-  // stroked underline that reads as a signature flourish.
+function LogoMark_UNUSED() {
+  // Removed per brand decision — wordmark only, no icon. Kept for reference.
   return (
     <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
       <rect x="1" y="1" width="30" height="30" rx="8" fill="#0f766e" />
@@ -469,10 +467,7 @@ function CompetitorTable() {
           <tbody>
             <tr className="border-b border-slate-200 bg-teal-50/60">
               <td className="py-4 pr-6">
-                <div className="flex items-center gap-3">
-                  <LogoMark />
-                  <span className="font-semibold text-teal-800">Signaturely Growth</span>
-                </div>
+                <span className="font-semibold text-teal-800">Signaturely Growth</span>
               </td>
               <td className="py-4 pr-6 font-semibold text-teal-800">A${growthPrice}/mo</td>
               <td className="py-4 pr-6 text-slate-700">Flat rate · up to 50 staff</td>
@@ -663,8 +658,7 @@ function Footer() {
     <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="flex flex-col items-center justify-between gap-4 text-sm text-slate-500 md:flex-row">
-          <div className="flex items-center gap-2">
-            <LogoMark />
+          <div className="font-semibold text-slate-700">
             <span>© {new Date().getFullYear()} Signaturely</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">

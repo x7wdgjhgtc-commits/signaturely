@@ -126,9 +126,9 @@ export default function Admin() {
       {/* Header */}
       <header className="border-b border-border bg-card/50 sticky top-0 z-10 backdrop-blur">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo />
-            <div>
+          <div className="flex items-center gap-4">
+            <span className="text-lg font-semibold tracking-tight text-slate-900">Signaturely</span>
+            <div className="border-l border-slate-200 pl-4">
               <div className="text-sm font-semibold">{company.name}</div>
               <div className="text-xs text-muted-foreground font-mono">
                 /{company.slug}
@@ -1917,21 +1917,7 @@ function ColorField({
   );
 }
 
-function Logo() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-      <rect width="32" height="32" rx="8" className="fill-primary" />
-      <path
-        d="M8 22 L14 10 L18 18 L24 12"
-        stroke="white"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+// Logo icon removed per brand decision — wordmark only.
 
 // -- Contact row editor -------------------------------------------------------
 // Renders an SVG icon inline using dangerouslySetInnerHTML — the icon library
