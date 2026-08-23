@@ -1069,9 +1069,25 @@ function BrandEditor({
         </div>
       </div>
 
+      {/* MOBILE: Save template button directly under the preview so it's
+          always in reach without scrolling to the bottom of the form. */}
+      <div className="lg:hidden order-2">
+        <Button
+          onClick={save}
+          disabled={saving}
+          className="w-full"
+          data-testid="button-save-brand-mobile"
+        >
+          {saving ? "Saving…" : "Save template"}
+        </Button>
+        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+          Changes preview live. Save applies them to every staff signature.
+        </p>
+      </div>
+
       {/* MOBILE: section dropdown — replaces the vertical rail so the
           selected section's inputs get all the horizontal space. */}
-      <div className="lg:hidden order-2">
+      <div className="lg:hidden order-3">
         <label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
           Edit section
         </label>
@@ -1122,7 +1138,7 @@ function BrandEditor({
       </nav>
 
       {/* Editor panel (fields for the selected section). */}
-      <div className="min-w-0 order-3 lg:order-none">
+      <div className="min-w-0 order-4 lg:order-none">
         <h2 className="font-serif text-xl mb-1 hidden lg:block">Signature template</h2>
         <p className="text-sm text-muted-foreground mb-5 hidden lg:block">
           These settings apply to every staff signature.
@@ -1576,23 +1592,6 @@ function BrandEditor({
             </Field>
           )}
         </div>
-      </div>
-
-      {/* MOBILE: save button below inputs (matches natural top-to-bottom
-          flow of the phone layout). Hidden on desktop — desktop shows Save
-          under the section rail. */}
-      <div className="lg:hidden order-4">
-        <Button
-          onClick={save}
-          disabled={saving}
-          className="w-full"
-          data-testid="button-save-brand-mobile"
-        >
-          {saving ? "Saving…" : "Save template"}
-        </Button>
-        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-          Changes preview live. Save applies them to every staff signature.
-        </p>
       </div>
 
       {/* DESKTOP: sticky preview column. Hidden below `lg`; mobile uses the
