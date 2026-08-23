@@ -249,9 +249,16 @@ function HeroPreview() {
           </div>
           <div className="text-slate-500">Best,<br />Steve</div>
 
-          {/* Real signature rendered by the production template engine. */}
+          {/* Real signature rendered by the production template engine.
+              The signature template uses fixed pixel widths (as email clients require).
+              On phone viewports the raw preview would squish awkwardly — one word per
+              line — so we render it at its natural desktop width and then
+              proportionally scale it down via CSS transform, matching the layout users
+              actually see in their inbox. */}
           <div className="pt-2">
-            <SignaturePreview brand={HERO_BRAND} staff={HERO_STAFF} showCopy={false} />
+            <div className="hero-signature-scale">
+              <SignaturePreview brand={HERO_BRAND} staff={HERO_STAFF} showCopy={false} />
+            </div>
           </div>
         </CardContent>
       </Card>

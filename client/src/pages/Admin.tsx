@@ -122,20 +122,21 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* Header — stacks on mobile so wordmark + workspace share row 1 and the
+          action buttons wrap to row 2 without overflowing the viewport. */}
       <header className="border-b border-border bg-card/50 sticky top-0 z-10 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-lg font-semibold tracking-tight text-slate-900">Signaturely</span>
-            <div className="border-l border-slate-200 pl-4">
-              <div className="text-sm font-semibold">{company.name}</div>
-              <div className="text-xs text-muted-foreground font-mono">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2 gap-x-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <span className="text-lg font-semibold tracking-tight text-slate-900 shrink-0">Signaturely</span>
+            <div className="border-l border-slate-200 pl-3 sm:pl-4 min-w-0">
+              <div className="text-sm font-semibold truncate">{company.name}</div>
+              <div className="text-xs text-muted-foreground font-mono truncate">
                 /{company.slug}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <PlanBadge
               plan={company.plan}
               status={company.subscriptionStatus}
@@ -159,35 +160,40 @@ export default function Admin() {
               }}
               className="gap-2"
             >
-              <LogOut className="w-4 h-4" /> Sign out
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Tabs value={tab} onValueChange={(v) => setTab(v as "staff" | "company" | "brand")}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="staff" data-testid="tab-staff" className="gap-2">
-              <Users className="w-4 h-4" /> Staff
-            </TabsTrigger>
-            <TabsTrigger value="company" data-testid="tab-company" className="gap-2">
-              <Building2 className="w-4 h-4" /> Company info
-            </TabsTrigger>
-            <TabsTrigger value="brand" data-testid="tab-brand" className="gap-2">
-              <Palette className="w-4 h-4" /> Brand & template
-            </TabsTrigger>
-          </TabsList>
+          {/* Horizontally scroll the tab strip on narrow viewports so labels
+              stay legible instead of clipping off-screen. */}
+          <div className="mb-6 -mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
+            <TabsList className="w-max">
+              <TabsTrigger value="staff" data-testid="tab-staff" className="gap-2">
+                <Users className="w-4 h-4" /> Staff
+              </TabsTrigger>
+              <TabsTrigger value="company" data-testid="tab-company" className="gap-2">
+                <Building2 className="w-4 h-4" /> Company info
+              </TabsTrigger>
+              <TabsTrigger value="brand" data-testid="tab-brand" className="gap-2">
+                <Palette className="w-4 h-4" /> Brand & template
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="staff" className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h1 className="font-serif text-2xl">Staff</h1>
                 <p className="text-sm text-muted-foreground">
                   Each member gets a unique share link they can open to copy their signature.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   onClick={() => setInvitesOpen(true)}

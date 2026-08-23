@@ -201,12 +201,16 @@ export function SignaturePreview({
     <div className="space-y-3">
       <div
         ref={outerRef}
-        className="relative border border-border rounded-lg bg-white p-6 overflow-auto max-w-full"
+        className="relative border border-border rounded-lg bg-white p-6 overflow-x-auto max-w-full"
       >
         {/* Absolute-positioning parent that shares the same origin as previewRef.
             Because it's inside outerRef with `p-6`, we position it at inset-0 minus padding by
-            wrapping preview + handles together. */}
-        <div ref={layerRef} className="relative">
+            wrapping preview + handles together.
+
+            The inline min-width keeps the email-client table from collapsing on
+            narrow viewports — the outer wrapper scrolls horizontally instead of
+            squishing name/title/contact text into a single-word-per-line stack. */}
+        <div ref={layerRef} className="relative" style={{ minWidth: 520, width: "max-content" }}>
           <div
             ref={previewRef}
             dangerouslySetInnerHTML={{ __html: html }}
