@@ -247,7 +247,7 @@ export default function Admin() {
             </div>
 
             {staffQuery.isLoading ? (
-              <div className="grid gap-3">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
@@ -258,7 +258,7 @@ export default function Admin() {
             ) : (staffQuery.data ?? []).length === 0 ? (
               <EmptyState onAdd={() => setNewOpen(true)} />
             ) : (
-              <div className="grid gap-3">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
                 {staffQuery.data!.map((s) => (
                   <StaffRow
                     key={s.id}
@@ -1812,7 +1812,7 @@ function CompanyEditor({
   const dirty = JSON.stringify(local) !== JSON.stringify(brand);
 
   return (
-    <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 items-start">
+    <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 items-start">
       <div className="space-y-6">
         <div>
           <h1 className="font-serif text-2xl">Company info</h1>
