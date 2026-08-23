@@ -315,3 +315,16 @@
   }
 
 }
+
+/* Prevent inputs and other content inside dialogs from forcing horizontal
+ * overflow past the dialog's viewport-clamped width on mobile. Grid and flex
+ * children default to `min-width: auto` which lets long content push past
+ * the track — pinning them to 0 makes `w-full` inputs behave correctly. */
+[role="dialog"] * {
+  min-width: 0;
+}
+[role="dialog"] input,
+[role="dialog"] textarea,
+[role="dialog"] select {
+  max-width: 100%;
+}

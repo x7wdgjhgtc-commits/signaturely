@@ -541,7 +541,7 @@ function StaffDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-2 gap-6">
           <div className="space-y-3">
             <FieldRow>
               <Field label="Full name">
