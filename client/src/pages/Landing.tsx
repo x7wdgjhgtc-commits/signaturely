@@ -241,8 +241,10 @@ function HeroPreview() {
   // pixel widths (email clients require this to render consistently). On
   // phone viewports we render the card at its natural desktop width and
   // then proportionally scale the whole thing down so it fits the viewport
-  // without clipping AND without any horizontal scrolling. A ResizeObserver
-  // keeps the outer wrapper the correct height at every scale factor.
+  // without clipping AND without any horizontal scrolling. We measure the
+  // inner card's UNSCALED height and set the wrapper's height to
+  // innerHeight * scale so the following section never overlaps, even when
+  // images (avatar, banner) finish loading after first paint.
   const NATURAL_WIDTH = 600;               // px — desktop-natural card width
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -255,18 +257,31 @@ function HeroPreview() {
     if (!outer || !inner) return;
     const compute = () => {
       const available = outer.clientWidth;
-      const next = available < NATURAL_WIDTH ? available / NATURAL_WIDTH : 1;
-      setScale(next);
-      setInnerHeight(inner.getBoundingClientRect().height * next);
+      const nextScale =
+        available < NATURAL_WIDTH ? available / NATURAL_WIDTH : 1;
+      // Read the unscaled height of the inner card. Because the inner has a
+      // transform applied, `offsetHeight` still reports the pre-transform
+      // layout box — exactly what we need.
+      const naturalHeight = inner.offsetHeight;
+      setScale(nextScale);
+      setInnerHeight(naturalHeight * nextScale);
     };
     compute();
     const ro = new ResizeObserver(compute);
     ro.observe(outer);
     ro.observe(inner);
     window.addEventListener("resize", compute);
+    // Recompute after any image inside the card finishes loading, since
+    // that changes the natural height.
+    const imgs = Array.from(inner.querySelectorAll("img"));
+    const onLoad = () => compute();
+    imgs.forEach((img) => {
+      if (!img.complete) img.addEventListener("load", onLoad);
+    });
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", compute);
+      imgs.forEach((img) => img.removeEventListener("load", onLoad));
     };
   }, []);
 
