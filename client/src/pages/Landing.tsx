@@ -492,6 +492,25 @@ const COMPETITORS: Competitor[] = [
 
 function CompetitorTable() {
   const growthPrice = PLANS.growth.price;
+  // Rows in reading order — our plan first, competitors after. Rendered as
+  // stacked cards on phone viewports and as a table from `md` upwards.
+  const rows = [
+    {
+      name: "Signaturely Growth",
+      logo: null as JSX.Element | null,
+      monthly10: `A$${growthPrice}/mo`,
+      note: "Flat rate · up to 50 staff",
+      highlight: true,
+    },
+    ...COMPETITORS.map((c) => ({
+      name: c.name,
+      logo: c.logo,
+      monthly10: c.monthly10,
+      note: c.note,
+      highlight: false,
+    })),
+  ];
+
   return (
     <section id="compare" className="mx-auto max-w-6xl px-6 py-20">
       <div className="mx-auto max-w-2xl text-center">
@@ -499,11 +518,47 @@ function CompetitorTable() {
           Flat pricing. No per-seat surprises.
         </h2>
         <p className="mt-3 text-slate-600">
-          Below is what a 10-person team actually pays per month, based on each vendor's own
-          published pricing. All figures in AUD.
+          What a 10-person team pays each month, from each vendor's own published pricing. All figures in AUD.
         </p>
       </div>
-      <div className="mt-10 overflow-x-auto">
+
+      {/* Mobile: stacked cards. Legible price, no wrapping vendor names. */}
+      <div className="mt-10 grid gap-3 md:hidden">
+        {rows.map((r) => (
+          <div
+            key={r.name}
+            className={`rounded-xl border p-5 ${
+              r.highlight
+                ? "border-teal-200 bg-teal-50/60"
+                : "border-slate-200 bg-white"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                {r.logo}
+                <span
+                  className={`font-semibold ${
+                    r.highlight ? "text-teal-800" : "text-slate-900"
+                  }`}
+                >
+                  {r.name}
+                </span>
+              </div>
+              <div
+                className={`shrink-0 text-lg font-semibold ${
+                  r.highlight ? "text-teal-800" : "text-slate-900"
+                }`}
+              >
+                {r.monthly10}
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{r.note}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table — easier to scan side-by-side. */}
+      <div className="mt-10 hidden md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-slate-500">
@@ -513,28 +568,43 @@ function CompetitorTable() {
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-slate-200 bg-teal-50/60">
-              <td className="py-4 pr-6">
-                <span className="font-semibold text-teal-800">Signaturely Growth</span>
-              </td>
-              <td className="py-4 pr-6 font-semibold text-teal-800">A${growthPrice}/mo</td>
-              <td className="py-4 pr-6 text-slate-700">Flat rate · up to 50 staff</td>
-            </tr>
-            {COMPETITORS.map((c) => (
-              <tr key={c.name} className="border-b border-slate-100 text-slate-700">
+            {rows.map((r) => (
+              <tr
+                key={r.name}
+                className={`border-b ${
+                  r.highlight
+                    ? "border-slate-200 bg-teal-50/60"
+                    : "border-slate-100 text-slate-700"
+                }`}
+              >
                 <td className="py-4 pr-6">
                   <div className="flex items-center gap-3">
-                    {c.logo}
-                    <span>{c.name}</span>
+                    {r.logo}
+                    <span
+                      className={
+                        r.highlight ? "font-semibold text-teal-800" : ""
+                      }
+                    >
+                      {r.name}
+                    </span>
                   </div>
                 </td>
-                <td className="py-4 pr-6 font-medium">{c.monthly10}</td>
-                <td className="py-4 pr-6 text-slate-600">{c.note}</td>
+                <td
+                  className={`py-4 pr-6 ${
+                    r.highlight
+                      ? "font-semibold text-teal-800"
+                      : "font-medium"
+                  }`}
+                >
+                  {r.monthly10}
+                </td>
+                <td className="py-4 pr-6 text-slate-600">{r.note}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
       <p className="mt-4 text-xs text-slate-400">
         Competitor prices from vendor pricing pages accessed August 2026. USD conversions to AUD
         approximate. Signaturely Growth is a flat A${growthPrice}/mo regardless of team size (up to 50 staff).

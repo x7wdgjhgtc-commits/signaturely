@@ -38,13 +38,13 @@ function publicCompany(c: Company) {
   };
 }
 
-// A workspace can use the app if it has an entitled subscription OR is still
-// inside its trial window OR is on the free plan (with seat cap enforcement
-// applied elsewhere). We treat `active` and `trialing` as entitled.
+// A workspace can use the app if it is on the free plan (with seat cap
+// enforcement applied elsewhere) OR has an active subscription. New
+// workspaces default to the free plan; paid features unlock only after
+// checkout completes and Stripe reports `active`.
 function isEntitled(c: Company): boolean {
   if (c.plan === "free") return true;
-  if (["active", "trialing"].includes(c.subscriptionStatus)) return true;
-  if (c.trialEndsAt && c.trialEndsAt > Date.now()) return true;
+  if (c.subscriptionStatus === "active") return true;
   return false;
 }
 
@@ -145,15 +145,10 @@ export async function registerRoutes(
       }),
       password: parsed.data.password,
     });
-    // Every new workspace gets a 14-day trial on the free tier so they can
-    // explore paid features before deciding.
-    const fourteenDays = 14 * 24 * 60 * 60 * 1000;
-    const updated =
-      (await storage.updateBilling(company.id, {
-        trialEndsAt: Date.now() + fourteenDays,
-      })) ?? company;
-    req.session.companyId = updated.id;
-    res.json(publicCompany(updated));
+    // New workspaces start on the Free plan. If they clicked a paid plan
+    // CTA, the client hands them straight to Stripe checkout after signup.
+    req.session.companyId = company.id;
+    res.json(publicCompany(company));
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -376,8 +371,8 @@ export async function registerRoutes(
     }
     if (!isEntitled(company)) {
       return res.status(402).json({
-        message: "Your trial has ended. Choose a plan to keep adding staff.",
-        code: "trial_ended",
+        message: "Your subscription isn't active. Complete checkout to keep adding staff.",
+        code: "subscription_inactive",
       });
     }
     const row = await storage.createStaff(req.session.companyId!, parsed.data);

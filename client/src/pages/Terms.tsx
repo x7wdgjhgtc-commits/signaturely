@@ -44,7 +44,7 @@ export default function Terms() {
       </p>
       <p>
         Free plans are provided as-is and may be limited or discontinued at any
-        time. Paid plans include a 14-day free trial that starts on signup.
+        time. Paid plans are billed immediately upon subscribing.
       </p>
 
       <h2>4. Acceptable use</h2>
