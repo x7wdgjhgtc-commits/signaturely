@@ -1039,7 +1039,7 @@ function BrandEditor({
     ["layout", "Layout"],
     ["colors", "Colors"],
     ["type", "Typography"],
-    ["logo", "Logo & banner"],
+    ["logo", "Photo, logo & banners"],
     ["contact", "Contact rows"],
     ["social", "Social"],
     ["company", "Company details"],
@@ -1149,12 +1149,6 @@ function BrandEditor({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-border">
-                <ToggleRow
-                  label="Show staff photo"
-                  value={local.showPhoto}
-                  onChange={(v) => update("showPhoto", v)}
-                  testId="switch-showPhoto"
-                />
                 {["horizontal", "compact", "card", "banner"].includes(
                   local.layout,
                 ) && (
@@ -1166,53 +1160,6 @@ function BrandEditor({
                   />
                 )}
               </div>
-
-              {local.showPhoto && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-border">
-                  <Field label="Photo shape">
-                    <Select
-                      value={local.photoShape}
-                      onValueChange={(v) =>
-                        update("photoShape", v as BrandConfig["photoShape"])
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="circle">Circle</SelectItem>
-                        <SelectItem value="rounded">Rounded square</SelectItem>
-                        <SelectItem value="square">Square</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label={`Photo size: ${local.photoSize}px`}>
-                    <Slider
-                      min={48}
-                      max={140}
-                      step={2}
-                      value={[local.photoSize]}
-                      onValueChange={(v) => update("photoSize", v[0])}
-                    />
-                  </Field>
-                  <Field label="Photo vertical alignment">
-                    <Select
-                      value={local.photoAlign}
-                      onValueChange={(v) =>
-                        update("photoAlign", v as BrandConfig["photoAlign"])
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="top">Top (align with name)</SelectItem>
-                        <SelectItem value="middle">Center vertically</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-              )}
             </>
           )}
 
@@ -1297,6 +1244,78 @@ function BrandEditor({
 
           {section === "logo" && (
             <div className="space-y-4">
+              {/* --- Staff photo (per-signature) --- */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Staff photo
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Each staff member's headshot is set on their profile in the
+                  Staff tab. These controls change how every photo looks across
+                  the whole workspace.
+                </p>
+                <div className="space-y-4">
+                  <ToggleRow
+                    label="Show staff photo"
+                    value={local.showPhoto}
+                    onChange={(v) => update("showPhoto", v)}
+                    testId="switch-showPhoto"
+                  />
+                  {local.showPhoto && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label="Photo shape">
+                        <Select
+                          value={local.photoShape}
+                          onValueChange={(v) =>
+                            update("photoShape", v as BrandConfig["photoShape"])
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="circle">Circle</SelectItem>
+                            <SelectItem value="rounded">Rounded square</SelectItem>
+                            <SelectItem value="square">Square</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label={`Photo size: ${local.photoSize}px`}>
+                        <Slider
+                          min={48}
+                          max={140}
+                          step={2}
+                          value={[local.photoSize]}
+                          onValueChange={(v) => update("photoSize", v[0])}
+                        />
+                      </Field>
+                      <Field label="Photo vertical alignment">
+                        <Select
+                          value={local.photoAlign}
+                          onValueChange={(v) =>
+                            update("photoAlign", v as BrandConfig["photoAlign"])
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="top">Top (align with name)</SelectItem>
+                            <SelectItem value="middle">Center vertically</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* --- Company logo --- */}
+              <div className="pt-4 border-t border-border">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Company logo
+                </div>
+                <div className="space-y-4">
               <Field label="Logo image">
                 <ImageUploader
                   value={local.logoUrl}
@@ -1349,7 +1368,15 @@ function BrandEditor({
                   </Select>
                 </Field>
               </div>
-              <div className="pt-3 border-t border-border space-y-4">
+                </div>
+              </div>
+
+              {/* --- Banner --- */}
+              <div className="pt-4 border-t border-border">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Banner
+                </div>
+                <div className="space-y-4">
                 <Field label="Banner image (optional — shown under signature)">
                   <ImageUploader
                     value={local.bannerUrl}
@@ -1377,6 +1404,7 @@ function BrandEditor({
                     data-testid="input-bannerHref"
                   />
                 </Field>
+                </div>
               </div>
             </div>
           )}
@@ -1823,7 +1851,7 @@ function CompanyEditor({
             <h2 className="font-semibold text-sm mb-3">Company logo</h2>
             <p className="text-xs text-muted-foreground -mt-2 mb-3">
               Appears in every staff signature. Fine-tune size and alignment
-              from Brand & template → Logo & banner.
+              from Brand & template → Photo, logo & banners.
             </p>
             <Field label="Logo image">
               <ImageUploader
