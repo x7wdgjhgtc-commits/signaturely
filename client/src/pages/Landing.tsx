@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles, Users, Palette, Zap, Shield, Mail } from "lucide-react";
+import { Check, Sparkles, Users, Palette, Zap, Shield, Mail } from "lucide-react";
 import { PLANS, planMonthlyTotal, defaultBrandConfig } from "@shared/schema";
 import type { PlanId, BrandConfig, Staff } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -430,7 +430,6 @@ type Competitor = {
   logo: JSX.Element;
   monthly10: string;    // A$/mo for 10 seats on their cheapest plan
   note: string;
-  watermark: string;
 };
 
 const COMPETITORS: Competitor[] = [
@@ -439,14 +438,12 @@ const COMPETITORS: Competitor[] = [
     logo: <WiseStampLogo />,
     monthly10: "A$44",
     note: "A$19 base + A$1/user (billed monthly)",
-    watermark: "Yes on free",
   },
   {
     name: "Rocketseed",
     logo: <RocketseedLogo />,
     monthly10: "A$115",
     note: "A$75/mo minimum + per-user overage",
-    watermark: "No",
   },
 ];
 
@@ -470,7 +467,6 @@ function CompetitorTable() {
               <th className="py-3 pr-6 font-medium">Vendor</th>
               <th className="py-3 pr-6 font-medium">Cost for 10 staff</th>
               <th className="py-3 pr-6 font-medium">Pricing model</th>
-              <th className="py-3 pr-6 font-medium">Watermark on free</th>
             </tr>
           </thead>
           <tbody>
@@ -480,9 +476,6 @@ function CompetitorTable() {
               </td>
               <td className="py-4 pr-6 font-semibold text-teal-800">A${growthPrice}/mo</td>
               <td className="py-4 pr-6 text-slate-700">Flat rate · up to 50 staff</td>
-              <td className="py-4 pr-6">
-                <Check className="mr-1 inline h-4 w-4 text-teal-700" /> No
-              </td>
             </tr>
             {COMPETITORS.map((c) => (
               <tr key={c.name} className="border-b border-slate-100 text-slate-700">
@@ -494,13 +487,6 @@ function CompetitorTable() {
                 </td>
                 <td className="py-4 pr-6 font-medium">{c.monthly10}</td>
                 <td className="py-4 pr-6 text-slate-600">{c.note}</td>
-                <td className="py-4 pr-6">
-                  {c.watermark === "No" ? (
-                    <><Check className="mr-1 inline h-4 w-4 text-teal-700" /> No</>
-                  ) : (
-                    <><X className="mr-1 inline h-4 w-4 text-slate-400" /> {c.watermark}</>
-                  )}
-                </td>
               </tr>
             ))}
           </tbody>
