@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { apiRequest } from "./queryClient";
-import type { BrandConfig } from "@shared/schema";
+import type { BrandConfig, PlanId } from "@shared/schema";
 
 export interface AuthedCompany {
   id: number;
@@ -8,6 +8,10 @@ export interface AuthedCompany {
   name: string;
   adminEmail: string;
   brand: BrandConfig;
+  plan: PlanId;
+  subscriptionStatus: string;
+  trialEndsAt: number | null;
+  currentPeriodEnd: number | null;
 }
 
 interface AuthState {
@@ -24,20 +28,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [company, setCompany] = useState<AuthedCompany | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // See queryClient.ts — deploy_website text-replaces the token below with
+  // a relative proxy path ("port/5000") that we resolve against document.baseURI
+  // so it works under the sandboxed deploy path. Local dev keeps the literal
+  // and falls back to same-origin.
+  const PORT_TOKEN = "__PORT_5000__";
+  const API_BASE = PORT_TOKEN.startsWith("__PORT_")
+    ? ""
+    : new URL(PORT_TOKEN, document.baseURI).toString().replace(/\/$/, "");
+
   async function refresh() {
+    // Hard 4s cap so a hanging request can never trap RequireAuth on the
+    // “Loading…” splash. AbortController would be cleaner but we don’t need
+    // to cancel the underlying request — we just need `loading` to flip.
+    const bailTimer = setTimeout(() => {
+      console.warn("auth refresh timed out; unblocking UI");
+      setLoading(false);
+    }, 4000);
     try {
-      const res = await fetch(
-        ("__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__") + "/api/auth/me",
-        { credentials: "include" }
-      );
+      const res = await fetch(API_BASE + "/api/auth/me", {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (res.ok) {
         setCompany(await res.json());
       } else {
         setCompany(null);
       }
-    } catch {
+    } catch (e) {
+      console.error("auth refresh failed", e);
       setCompany(null);
     } finally {
+      clearTimeout(bailTimer);
       setLoading(false);
     }
   }

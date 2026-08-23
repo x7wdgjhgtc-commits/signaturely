@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BrandConfig, Staff } from "@shared/schema";
 import { renderSignatureHtml, renderSignaturePlain } from "@/lib/renderSignature";
 import { Button } from "@/components/ui/button";
@@ -9,20 +9,156 @@ interface Props {
   brand: BrandConfig;
   staff: Staff;
   showCopy?: boolean;
+  /**
+   * Plan the signature is being rendered under — drives free-plan
+   * watermarking. Optional so preview-only surfaces don't have to pass it.
+   */
+  plan?: string;
+  /** When provided, adds drag handles on images to resize live. */
+  onResizeLogo?: (px: number) => void;
+  onResizeBanner?: (px: number) => void;
+  onResizePhoto?: (px: number) => void;
 }
 
-export function SignaturePreview({ brand, staff, showCopy = true }: Props) {
-  const previewRef = useRef<HTMLDivElement>(null);
+type HandleKind = "logo" | "banner" | "photo";
+
+interface Handle {
+  kind: HandleKind;
+  // Position (in the resize-layer's local coords) of the image's bottom-right corner.
+  x: number;
+  y: number;
+}
+
+export function SignaturePreview({
+  brand,
+  staff,
+  showCopy = true,
+  plan,
+  onResizeLogo,
+  onResizeBanner,
+  onResizePhoto,
+}: Props) {
+  const outerRef = useRef<HTMLDivElement>(null); // scroll/padded container
+  const layerRef = useRef<HTMLDivElement>(null); // absolute positioning parent (same rect as outer)
+  const previewRef = useRef<HTMLDivElement>(null); // HTML content
   const [copied, setCopied] = useState(false);
   const [showHtml, setShowHtml] = useState(false);
   const { toast } = useToast();
 
-  const html = useMemo(() => renderSignatureHtml({ brand, staff }), [brand, staff]);
-  const plain = useMemo(() => renderSignaturePlain({ brand, staff }), [brand, staff]);
+  const html = useMemo(() => renderSignatureHtml({ brand, staff, plan }), [brand, staff, plan]);
+  const plain = useMemo(() => renderSignaturePlain({ brand, staff, plan }), [brand, staff, plan]);
+
+  const [handles, setHandles] = useState<Handle[]>([]);
+
+  // Locate resize targets and cache the current handle positions.
+  const measure = () => {
+    const preview = previewRef.current;
+    const layer = layerRef.current;
+    if (!preview || !layer) return;
+
+    const layerRect = layer.getBoundingClientRect();
+    const scrollLeft = outerRef.current?.scrollLeft ?? 0;
+    const scrollTop = outerRef.current?.scrollTop ?? 0;
+
+    const imgs = Array.from(preview.querySelectorAll("img"));
+    const next: Handle[] = [];
+    imgs.forEach((img) => {
+      if (!img.complete || img.naturalWidth === 0) return;
+      const src = img.getAttribute("src") || "";
+      let kind: HandleKind | null = null;
+      if (brand.bannerUrl && src === brand.bannerUrl && onResizeBanner) kind = "banner";
+      else if (brand.logoUrl && src === brand.logoUrl && onResizeLogo) kind = "logo";
+      else if (
+        onResizePhoto &&
+        img.clientWidth >= 40 &&
+        !src.startsWith("data:image/svg+xml") &&
+        src !== brand.logoUrl &&
+        src !== brand.bannerUrl
+      )
+        kind = "photo";
+      if (!kind) return;
+      const r = img.getBoundingClientRect();
+      next.push({
+        kind,
+        x: r.right - layerRect.left + scrollLeft,
+        y: r.bottom - layerRect.top + scrollTop,
+      });
+    });
+    setHandles(next);
+  };
+
+  // Re-measure whenever the html changes or state props affecting sizes update.
+  useLayoutEffect(() => {
+    // measure immediately, then again after images load (which changes dimensions)
+    measure();
+    const preview = previewRef.current;
+    if (!preview) return;
+    const imgs = Array.from(preview.querySelectorAll("img"));
+    const trigger = () => measure();
+    imgs.forEach((img) => {
+      if (img.complete) return;
+      img.addEventListener("load", trigger);
+      img.addEventListener("error", trigger);
+    });
+    return () => {
+      imgs.forEach((img) => {
+        img.removeEventListener("load", trigger);
+        img.removeEventListener("error", trigger);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html, brand.logoWidth, brand.bannerWidth, brand.photoSize]);
+
+  // Re-measure on any size change of the container.
+  useEffect(() => {
+    if (!outerRef.current) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(outerRef.current);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Drag handler using window-level listeners for reliability.
+  const startDrag = (kind: HandleKind, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Read the CURRENT stored size for that kind so drag deltas are correct.
+    const startVal =
+      kind === "logo"
+        ? brand.logoWidth
+        : kind === "banner"
+        ? brand.bannerWidth
+        : brand.photoSize;
+    const startX = e.clientX;
+
+    const min = kind === "photo" ? 48 : kind === "logo" ? 40 : 120;
+    const max = kind === "photo" ? 140 : kind === "logo" ? 400 : 720;
+
+    document.body.style.cursor = "nwse-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const next = Math.round(Math.min(max, Math.max(min, startVal + dx)));
+      if (kind === "logo") onResizeLogo?.(next);
+      else if (kind === "banner") onResizeBanner?.(next);
+      else if (kind === "photo") onResizePhoto?.(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
 
   async function copy() {
     try {
-      // Preferred: rich clipboard with both HTML and text — pastes styled in Gmail/Outlook.
       if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
         await navigator.clipboard.write([
           new ClipboardItem({
@@ -31,7 +167,6 @@ export function SignaturePreview({ brand, staff, showCopy = true }: Props) {
           }),
         ]);
       } else if (previewRef.current) {
-        // Fallback: select the rendered signature and execCommand copy
         const range = document.createRange();
         range.selectNodeContents(previewRef.current);
         const sel = window.getSelection();
@@ -60,15 +195,41 @@ export function SignaturePreview({ brand, staff, showCopy = true }: Props) {
     toast({ title: "HTML copied", description: "Paste as source in your email client." });
   }
 
+  const showHandles = !!(onResizeLogo || onResizeBanner || onResizePhoto);
+
   return (
     <div className="space-y-3">
-      <div className="border border-border rounded-lg bg-white p-6 overflow-auto max-w-full">
-        <div
-          ref={previewRef}
-          dangerouslySetInnerHTML={{ __html: html }}
-          data-testid="signature-preview"
-        />
+      <div
+        ref={outerRef}
+        className="relative border border-border rounded-lg bg-white p-6 overflow-auto max-w-full"
+      >
+        {/* Absolute-positioning parent that shares the same origin as previewRef.
+            Because it's inside outerRef with `p-6`, we position it at inset-0 minus padding by
+            wrapping preview + handles together. */}
+        <div ref={layerRef} className="relative">
+          <div
+            ref={previewRef}
+            dangerouslySetInnerHTML={{ __html: html }}
+            data-testid="signature-preview"
+          />
+          {showHandles &&
+            handles.map((h, i) => (
+              <div
+                key={`${h.kind}-${i}`}
+                onPointerDown={(e) => startDrag(h.kind, e)}
+                title={`Drag to resize ${h.kind}`}
+                className="absolute z-10 w-5 h-5 -ml-2.5 -mt-2.5 rounded-sm bg-primary border-2 border-white shadow-md cursor-nwse-resize hover:scale-125 active:scale-125 transition-transform touch-none"
+                style={{ left: h.x, top: h.y }}
+              />
+            ))}
+        </div>
       </div>
+
+      {showHandles && (
+        <p className="text-[11px] text-muted-foreground -mt-1">
+          Tip: drag the blue square at the corner of any image to resize it.
+        </p>
+      )}
 
       {showCopy && (
         <div className="flex flex-wrap gap-2">

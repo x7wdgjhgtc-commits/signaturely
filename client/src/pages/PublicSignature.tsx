@@ -8,6 +8,7 @@ interface PublicResponse {
   brand: BrandConfig;
   staff: Staff;
   company: { name: string; slug: string };
+  plan?: string;
 }
 
 export default function PublicSignature() {
@@ -38,7 +39,7 @@ export default function PublicSignature() {
     );
   }
 
-  const { brand, staff, company } = q.data;
+  const { brand, staff, company, plan } = q.data;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -63,7 +64,7 @@ export default function PublicSignature() {
           </p>
         </div>
 
-        <SignaturePreview brand={brand} staff={staff} />
+        <SignaturePreview brand={brand} staff={staff} plan={plan} />
 
         <div className="grid md:grid-cols-3 gap-4">
           <SetupCard

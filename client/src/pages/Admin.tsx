@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { BrandConfig, Staff, InsertStaff } from "@shared/schema";
-import { defaultBrandConfig } from "@shared/schema";
+import type { BrandConfig, Staff, InsertStaff, PlanId } from "@shared/schema";
+import { defaultBrandConfig, PLANS } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +28,14 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { SignaturePreview } from "@/components/SignaturePreview";
+import { ImageEditModal } from "@/components/ImageEditModal";
+import { ImageUploader } from "@/components/ImageUploader";
+import {
+  CONTACT_ICONS,
+  SOCIAL_ICONS,
+  socialById,
+  contactIconById,
+} from "@/lib/iconLibrary";
 import {
   Plus,
   Pencil,
@@ -38,7 +46,13 @@ import {
   Palette,
   Users,
   Eye,
+  Building2,
+  Send,
+  Check,
+  X as XIcon,
 } from "lucide-react";
+
+import type { StaffInvite } from "@shared/schema";
 
 const emptyStaff: InsertStaff = {
   slug: "",
@@ -60,24 +74,52 @@ const emptyStaff: InsertStaff = {
 };
 
 export default function Admin() {
-  const { company, logout } = useAuth();
+  const { company, loading, logout } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  // Detect the ?billing=success bounce back from Stripe Checkout so we can
+  // show a confirmation toast. Cleared from the URL after we react to it.
   useEffect(() => {
-    if (!company) navigate("/");
-  }, [company, navigate]);
+    const hashQ = typeof window !== "undefined"
+      ? window.location.hash.split("?")[1] || ""
+      : "";
+    const b = new URLSearchParams(hashQ).get("billing");
+    if (b === "success") {
+      toast({
+        title: "You're subscribed – thank you.",
+        description: "It may take a few seconds for your new plan to appear.",
+      });
+      window.location.hash = "#/admin";
+    }
+  }, [toast]);
 
-  if (!company) return null;
-
-  const [tab, setTab] = useState<"staff" | "brand">("staff");
+  const [tab, setTab] = useState<"staff" | "company" | "brand">("staff");
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [invitesOpen, setInvitesOpen] = useState(false);
 
-  const staffQuery = useQuery<Staff[]>({ queryKey: ["/api/staff"] });
-  const brandQuery = useQuery<BrandConfig>({ queryKey: ["/api/brand"] });
+  const staffQuery = useQuery<Staff[]>({
+    queryKey: ["/api/staff"],
+    enabled: !!company,
+  });
+  const brandQuery = useQuery<BrandConfig>({
+    queryKey: ["/api/brand"],
+    enabled: !!company,
+  });
 
   const brand = brandQuery.data ?? defaultBrandConfig;
+
+  if (loading || !company) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        <div className="flex items-center gap-3 text-sm">
+          <div className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
+          Loading your workspace…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,26 +135,44 @@ export default function Admin() {
               </div>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              logout();
-              navigate("/");
-            }}
-            data-testid="button-logout"
-            className="gap-2"
-          >
-            <LogOut className="w-4 h-4" /> Sign out
-          </Button>
+          <div className="flex items-center gap-3">
+            <PlanBadge
+              plan={company.plan}
+              status={company.subscriptionStatus}
+              trialEndsAt={company.trialEndsAt}
+            />
+            <Link href="/pricing">
+              <Button
+                size="sm"
+                variant={company.plan === "free" ? "default" : "outline"}
+                className={company.plan === "free" ? "bg-teal-700 hover:bg-teal-800" : ""}
+              >
+                {company.plan === "free" ? "Upgrade" : "Manage plan"}
+              </Button>
+            </Link>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                await logout();
+                navigate("/");
+              }}
+              className="gap-2"
+            >
+              <LogOut className="w-4 h-4" /> Sign out
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "staff" | "brand")}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "staff" | "company" | "brand")}>
           <TabsList className="mb-6">
             <TabsTrigger value="staff" data-testid="tab-staff" className="gap-2">
               <Users className="w-4 h-4" /> Staff
+            </TabsTrigger>
+            <TabsTrigger value="company" data-testid="tab-company" className="gap-2">
+              <Building2 className="w-4 h-4" /> Company info
             </TabsTrigger>
             <TabsTrigger value="brand" data-testid="tab-brand" className="gap-2">
               <Palette className="w-4 h-4" /> Brand & template
@@ -127,9 +187,23 @@ export default function Admin() {
                   Each member gets a unique share link they can open to copy their signature.
                 </p>
               </div>
-              <Button onClick={() => setNewOpen(true)} data-testid="button-new-staff" className="gap-2">
-                <Plus className="w-4 h-4" /> Add staff
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setInvitesOpen(true)}
+                  data-testid="button-invite-staff"
+                  className="gap-2"
+                >
+                  <Send className="w-4 h-4" /> Invite link
+                </Button>
+                <Button
+                  onClick={() => setNewOpen(true)}
+                  data-testid="button-new-staff"
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add staff
+                </Button>
+              </div>
             </div>
 
             {staffQuery.isLoading ? (
@@ -155,6 +229,13 @@ export default function Admin() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="company">
+            <CompanyEditor
+              brand={brand}
+              onChange={(b) => queryClient.setQueryData(["/api/brand"], b)}
+            />
           </TabsContent>
 
           <TabsContent value="brand">
@@ -189,6 +270,9 @@ export default function Admin() {
         </Tabs>
       </main>
 
+      {/* Invite links dialog */}
+      <InvitesDialog open={invitesOpen} onOpenChange={setInvitesOpen} />
+
       {/* New staff dialog */}
       <StaffDialog
         open={newOpen}
@@ -197,10 +281,25 @@ export default function Admin() {
         initial={emptyStaff}
         brand={brand}
         onSubmit={async (data) => {
-          await apiRequest("POST", "/api/staff", data);
-          queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
-          setNewOpen(false);
-          toast({ title: "Staff added" });
+          try {
+            await apiRequest("POST", "/api/staff", data);
+            queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+            setNewOpen(false);
+            toast({ title: "Staff added" });
+          } catch (e: any) {
+            // 402 responses come back with a `code` in the JSON body so we
+            // can nudge the user to upgrade rather than just showing an error.
+            const msg = String(e?.message ?? "");
+            if (msg.startsWith("402")) {
+              toast({
+                title: "You've hit your plan's staff limit.",
+                description: "Upgrade to keep adding team members.",
+              });
+              navigate("/pricing");
+              return;
+            }
+            toast({ title: "Couldn't add staff", description: msg });
+          }
         }}
       />
 
@@ -348,6 +447,7 @@ function StaffDialog({
   onDelete?: () => Promise<void>;
   showDelete?: boolean;
 }) {
+  const { company } = useAuth();
   const [form, setForm] = useState<InsertStaff>(emptyStaff);
   const [saving, setSaving] = useState(false);
 
@@ -458,12 +558,12 @@ function StaffDialog({
                 />
               </Field>
             </FieldRow>
-            <Field label="Photo URL">
-              <Input
+            <Field label="Photo">
+              <ImageUploader
                 value={form.photoUrl}
-                onChange={(e) => setForm({ ...form, photoUrl: e.target.value })}
-                placeholder="https://…/headshot.jpg"
-                data-testid="input-photoUrl"
+                onChange={(v) => setForm({ ...form, photoUrl: v })}
+                placeholder="Paste an image URL or upload a headshot"
+                aspect={1}
               />
             </Field>
             <Field label="Address (overrides company address)">
@@ -524,7 +624,7 @@ function StaffDialog({
             <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
               Live preview
             </div>
-            <SignaturePreview brand={brand} staff={previewStaff} showCopy={false} />
+            <SignaturePreview brand={brand} staff={previewStaff} showCopy={false} plan={company?.plan} />
           </div>
         </div>
 
@@ -575,6 +675,242 @@ function StaffDialog({
   );
 }
 
+// ---------- Staff invite links ----------
+// Admin surface to mint / copy / revoke share-once join links. The recipient
+// opens the URL and fills their own profile — no login required on their end.
+function InvitesDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const invitesQuery = useQuery<StaffInvite[]>({
+    queryKey: ["/api/invites"],
+    enabled: open,
+  });
+  const [newLabel, setNewLabel] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const inviteUrl = (token: string) =>
+    `${window.location.origin}${window.location.pathname}#/join/${token}`;
+
+  async function create() {
+    setCreating(true);
+    try {
+      const r = await apiRequest("POST", "/api/invites", { label: newLabel });
+      const invite: StaffInvite = await r.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/invites"] });
+      setNewLabel("");
+      // Auto-copy the fresh link so it’s immediately paste-ready.
+      try {
+        await navigator.clipboard.writeText(inviteUrl(invite.token));
+        setCopiedId(invite.id);
+        toast({ title: "Invite link created", description: "Copied to clipboard." });
+        window.setTimeout(() => setCopiedId(null), 1600);
+      } catch {
+        toast({ title: "Invite link created" });
+      }
+    } catch (e: any) {
+      toast({ title: "Couldn’t create invite", description: e.message, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revoke(id: number) {
+    if (!confirm("Revoke this invite link?")) return;
+    try {
+      await apiRequest("DELETE", `/api/invites/${id}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/invites"] });
+      toast({ title: "Invite revoked" });
+    } catch (e: any) {
+      toast({ title: "Couldn’t revoke", description: e.message, variant: "destructive" });
+    }
+  }
+
+  async function copy(inv: StaffInvite) {
+    try {
+      await navigator.clipboard.writeText(inviteUrl(inv.token));
+      setCopiedId(inv.id);
+      toast({ title: "Copied to clipboard" });
+      window.setTimeout(() => setCopiedId(null), 1600);
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
+  }
+
+  const invites = invitesQuery.data ?? [];
+  const active = invites.filter((i) => !i.usedAt);
+  const used = invites.filter((i) => !!i.usedAt);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Invite staff to add themselves</DialogTitle>
+        </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">
+          Create a link, share it with a team member, and they can fill in their
+          own profile without needing a login. Each link works once and expires
+          after 30 days.
+        </p>
+
+        <div className="bg-muted/40 border border-border rounded-lg p-4 space-y-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            New invite
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Optional note — e.g. ‘Sarah, marketing’"
+              data-testid="input-invite-label"
+              className="flex-1"
+            />
+            <Button
+              onClick={create}
+              disabled={creating}
+              data-testid="button-create-invite"
+              className="gap-2"
+            >
+              <Send className="w-4 h-4" />
+              {creating ? "Creating…" : "Create link"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Active links ({active.length})
+          </div>
+          {invitesQuery.isLoading ? (
+            <div className="h-16 rounded-lg bg-muted/50 animate-pulse border border-border" />
+          ) : active.length === 0 ? (
+            <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-4 text-center">
+              No active invites yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {active.map((inv) => (
+                <InviteRow
+                  key={inv.id}
+                  invite={inv}
+                  url={inviteUrl(inv.token)}
+                  copied={copiedId === inv.id}
+                  onCopy={() => copy(inv)}
+                  onRevoke={() => revoke(inv.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {used.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              Used / expired
+            </div>
+            <div className="space-y-2">
+              {used.slice(0, 6).map((inv) => (
+                <div
+                  key={inv.id}
+                  className="flex items-center justify-between gap-3 text-sm border border-border rounded-lg p-3 bg-card/50"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
+                      {inv.label || "Unlabelled invite"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Used {inv.usedAt ? new Date(inv.usedAt).toLocaleDateString() : "—"}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => revoke(inv.id)}
+                    className="gap-1 text-muted-foreground"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InviteRow({
+  invite,
+  url,
+  copied,
+  onCopy,
+  onRevoke,
+}: {
+  invite: StaffInvite;
+  url: string;
+  copied: boolean;
+  onCopy: () => void;
+  onRevoke: () => void;
+}) {
+  const created = new Date(invite.createdAt).toLocaleDateString();
+  const expires = invite.expiresAt
+    ? new Date(invite.expiresAt).toLocaleDateString()
+    : null;
+  return (
+    <div
+      className="bg-card border border-card-border rounded-lg p-3 space-y-2"
+      data-testid={`row-invite-${invite.id}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-medium truncate">
+            {invite.label || "Unlabelled invite"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Created {created}
+            {expires ? ` · expires ${expires}` : ""}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRevoke}
+          className="gap-1 text-muted-foreground"
+          data-testid={`button-revoke-invite-${invite.id}`}
+        >
+          <XIcon className="w-3.5 h-3.5" /> Revoke
+        </Button>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input value={url} readOnly className="font-mono text-xs" />
+        <Button
+          variant={copied ? "default" : "outline"}
+          size="sm"
+          onClick={onCopy}
+          className="gap-1 shrink-0"
+          data-testid={`button-copy-invite-${invite.id}`}
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5 flex-1 min-w-0">
@@ -599,6 +935,711 @@ function BrandEditor({
   onChange: (b: BrandConfig) => void;
   exampleStaff: Staff;
 }) {
+  const { company } = useAuth();
+  const [local, setLocal] = useState<BrandConfig>(brand);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => setLocal(brand), [brand]);
+
+  function update<K extends keyof BrandConfig>(k: K, v: BrandConfig[K]) {
+    const next = { ...local, [k]: v };
+    setLocal(next);
+    onChange(next);
+  }
+
+  // Some editors (CTA) need to update multiple fields at once.
+  const setLocalDirect = (updater: (s: BrandConfig) => BrandConfig) => {
+    setLocal((s) => {
+      const next = updater(s);
+      return next;
+    });
+  };
+
+  async function save() {
+    setSaving(true);
+    try {
+      const r = await apiRequest("PUT", "/api/brand", local);
+      const saved = await r.json();
+      queryClient.setQueryData(["/api/brand"], saved);
+      toast({ title: "Brand saved" });
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const [section, setSection] = useState<
+    | "layout"
+    | "colors"
+    | "type"
+    | "logo"
+    | "contact"
+    | "social"
+    | "company"
+    | "cta"
+    | "disclaimer"
+  >("layout");
+
+  return (
+    <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.1fr)] gap-6 items-start">
+      {/* Section rail */}
+      <nav className="lg:sticky lg:top-20 space-y-1">
+        {(
+          [
+            ["layout", "Layout"],
+            ["colors", "Colors"],
+            ["type", "Typography"],
+            ["logo", "Logo & banner"],
+            ["contact", "Contact rows"],
+            ["social", "Social"],
+            ["company", "Company details"],
+            ["cta", "Call to action"],
+            ["disclaimer", "Disclaimer"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setSection(id)}
+            className={`w-full text-left px-3 py-2 rounded-md text-sm transition ${
+              section === id
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+            data-testid={`nav-${id}`}
+          >
+            {label}
+          </button>
+        ))}
+
+        <div className="pt-4">
+          <Button
+            onClick={save}
+            disabled={saving}
+            className="w-full"
+            data-testid="button-save-brand"
+          >
+            {saving ? "Saving…" : "Save template"}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+            Changes preview live. Save applies them to every staff signature.
+          </p>
+        </div>
+      </nav>
+
+      {/* Editor panel */}
+      <div className="min-w-0">
+        <h2 className="font-serif text-xl mb-1">Signature template</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          These settings apply to every staff signature.
+        </p>
+
+        <div className="bg-card border border-card-border rounded-xl p-5 space-y-5">
+          {section === "layout" && (
+            <>
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Layout style
+                </Label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                  {LAYOUT_TILES.map((t) => (
+                    <LayoutTile
+                      key={t.id}
+                      selected={local.layout === t.id}
+                      onClick={() => update("layout", t.id)}
+                      label={t.label}
+                      diagram={t.diagram}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-border">
+                <ToggleRow
+                  label="Show staff photo"
+                  value={local.showPhoto}
+                  onChange={(v) => update("showPhoto", v)}
+                  testId="switch-showPhoto"
+                />
+                {["horizontal", "compact", "card", "banner"].includes(
+                  local.layout,
+                ) && (
+                  <ToggleRow
+                    label="Divider between logo & info"
+                    value={local.showDivider}
+                    onChange={(v) => update("showDivider", v)}
+                    testId="switch-showDivider"
+                  />
+                )}
+              </div>
+
+              {local.showPhoto && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-border">
+                  <Field label="Photo shape">
+                    <Select
+                      value={local.photoShape}
+                      onValueChange={(v) =>
+                        update("photoShape", v as BrandConfig["photoShape"])
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="circle">Circle</SelectItem>
+                        <SelectItem value="rounded">Rounded square</SelectItem>
+                        <SelectItem value="square">Square</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label={`Photo size: ${local.photoSize}px`}>
+                    <Slider
+                      min={48}
+                      max={140}
+                      step={2}
+                      value={[local.photoSize]}
+                      onValueChange={(v) => update("photoSize", v[0])}
+                    />
+                  </Field>
+                  <Field label="Photo vertical alignment">
+                    <Select
+                      value={local.photoAlign}
+                      onValueChange={(v) =>
+                        update("photoAlign", v as BrandConfig["photoAlign"])
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="top">Top (align with name)</SelectItem>
+                        <SelectItem value="middle">Center vertically</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
+            </>
+          )}
+
+          {section === "colors" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ColorField label="Primary (name & headings)" value={local.primaryColor} onChange={(v) => update("primaryColor", v)} />
+              <ColorField label="Accent (links & icons)" value={local.accentColor} onChange={(v) => update("accentColor", v)} />
+              <ColorField label="Body text" value={local.textColor} onChange={(v) => update("textColor", v)} />
+              <ColorField label="Muted text" value={local.mutedColor} onChange={(v) => update("mutedColor", v)} />
+              <ColorField label="Divider line" value={local.dividerColor} onChange={(v) => update("dividerColor", v)} />
+            </div>
+          )}
+
+          {section === "type" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Font family (email-safe)">
+                  <Select
+                    value={local.fontFamily}
+                    onValueChange={(v) =>
+                      update("fontFamily", v as BrandConfig["fontFamily"])
+                    }
+                  >
+                    <SelectTrigger data-testid="select-fontFamily">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        "Arial",
+                        "Helvetica",
+                        "Georgia",
+                        "Verdana",
+                        "Tahoma",
+                        "Trebuchet MS",
+                        "Times New Roman",
+                        "Courier New",
+                      ].map((f) => (
+                        <SelectItem key={f} value={f}>
+                          <span style={{ fontFamily: f }}>{f}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label={`Body size: ${local.fontSize}px`}>
+                  <Slider
+                    min={10}
+                    max={18}
+                    step={1}
+                    value={[local.fontSize]}
+                    onValueChange={(v) => update("fontSize", v[0])}
+                    data-testid="slider-fontSize"
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label={`Name size: ${local.nameSize}px`}>
+                  <Slider
+                    min={12}
+                    max={24}
+                    step={1}
+                    value={[local.nameSize]}
+                    onValueChange={(v) => update("nameSize", v[0])}
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-3 items-end">
+                  <ToggleRow
+                    label="Bold name"
+                    value={local.nameBold}
+                    onChange={(v) => update("nameBold", v)}
+                    testId="switch-nameBold"
+                  />
+                  <ToggleRow
+                    label="Bold title"
+                    value={local.titleBold}
+                    onChange={(v) => update("titleBold", v)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section === "logo" && (
+            <div className="space-y-4">
+              <Field label="Logo image">
+                <ImageUploader
+                  value={local.logoUrl}
+                  onChange={(v) => update("logoUrl", v)}
+                  placeholder="Paste an image URL or upload"
+                />
+              </Field>
+              <Field label={`Logo width: ${local.logoWidth}px`}>
+                <Slider
+                  min={40}
+                  max={300}
+                  step={5}
+                  value={[local.logoWidth]}
+                  onValueChange={(v) => update("logoWidth", v[0])}
+                  data-testid="slider-logoWidth"
+                />
+              </Field>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Logo vertical alignment">
+                  <Select
+                    value={local.logoAlign}
+                    onValueChange={(v) =>
+                      update("logoAlign", v as BrandConfig["logoAlign"])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="top">Top (align with name)</SelectItem>
+                      <SelectItem value="middle">Center vertically</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Logo horizontal alignment">
+                  <Select
+                    value={local.logoHAlign}
+                    onValueChange={(v) =>
+                      update("logoHAlign", v as BrandConfig["logoHAlign"])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="left">Left</SelectItem>
+                      <SelectItem value="center">Center</SelectItem>
+                      <SelectItem value="right">Right</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <div className="pt-3 border-t border-border space-y-4">
+                <Field label="Banner image (optional — shown under signature)">
+                  <ImageUploader
+                    value={local.bannerUrl}
+                    onChange={(v) => update("bannerUrl", v)}
+                    placeholder="Paste a banner image URL or upload"
+                    aspect={3}
+                  />
+                </Field>
+                {local.bannerUrl && (
+                  <Field label={`Banner width: ${local.bannerWidth}px`}>
+                    <Slider
+                      min={120}
+                      max={720}
+                      step={10}
+                      value={[local.bannerWidth]}
+                      onValueChange={(v) => update("bannerWidth", v[0])}
+                    />
+                  </Field>
+                )}
+                <Field label="Banner click-through URL">
+                  <Input
+                    value={local.bannerHref}
+                    onChange={(e) => update("bannerHref", e.target.value)}
+                    placeholder="example.com/promo"
+                    data-testid="input-bannerHref"
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {section === "contact" && (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Toggle which rows appear on each staff signature, and choose an icon or a custom text label as the indicator. Email is always shown.
+              </p>
+              <ContactRowEditor
+                enabled={local.showPhone}
+                onEnabledChange={(v) => update("showPhone", v)}
+                rowName="Phone"
+                iconRow="phone"
+                iconValue={local.phoneIcon}
+                onIconChange={(v) => update("phoneIcon", v)}
+                labelValue={local.phoneLabel}
+                onLabelChange={(v) => update("phoneLabel", v)}
+              />
+              <ContactRowEditor
+                enabled={local.showMobile}
+                onEnabledChange={(v) => update("showMobile", v)}
+                rowName="Mobile"
+                iconRow="mobile"
+                iconValue={local.mobileIcon}
+                onIconChange={(v) => update("mobileIcon", v)}
+                labelValue={local.mobileLabel}
+                onLabelChange={(v) => update("mobileLabel", v)}
+              />
+              <ContactRowEditor
+                enabled={true}
+                onEnabledChange={() => {}}
+                enabledDisabled
+                rowName="Email"
+                iconRow="email"
+                iconValue={local.emailIcon}
+                onIconChange={(v) => update("emailIcon", v)}
+                labelValue={local.emailLabel}
+                onLabelChange={(v) => update("emailLabel", v)}
+              />
+              <ContactRowEditor
+                enabled={local.showWebsite}
+                onEnabledChange={(v) => update("showWebsite", v)}
+                rowName="Website"
+                iconRow="website"
+                iconValue={local.websiteIcon}
+                onIconChange={(v) => update("websiteIcon", v)}
+                labelValue={local.websiteLabel}
+                onLabelChange={(v) => update("websiteLabel", v)}
+              />
+              <div className="pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <ToggleRow label="Address row" value={local.showAddress} onChange={(v) => update("showAddress", v)} />
+                <ToggleRow label="Pronouns beside name" value={local.showPronouns} onChange={(v) => update("showPronouns", v)} />
+              </div>
+            </div>
+          )}
+
+          {section === "social" && (
+            <div className="space-y-4">
+              <ToggleRow
+                label="Show social icons"
+                value={local.showSocialIcons}
+                onChange={(v) => update("showSocialIcons", v)}
+                testId="switch-showSocials"
+              />
+              {local.showSocialIcons && (
+                <>
+                  <div className="pt-3 border-t border-border">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Icon style
+                    </Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {([
+                        { value: "filled", label: "Filled (accent)" },
+                        { value: "color", label: "Full brand color" },
+                        { value: "outlined", label: "Outlined" },
+                        { value: "minimal", label: "Minimal" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => update("socialIconStyle", opt.value)}
+                          className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                            local.socialIconStyle === opt.value
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background border-input text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-border">
+                    <SocialsEditor
+                      value={local.socials as { network: string; url: string }[]}
+                      onChange={(v) => update("socials", v as any)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {section === "company" && (
+            <div className="space-y-4">
+              <Field label="Display name">
+                <Input
+                  value={local.companyDisplayName}
+                  onChange={(e) => update("companyDisplayName", e.target.value)}
+                  data-testid="input-companyDisplayName"
+                />
+              </Field>
+              <Field label="Tagline">
+                <Input
+                  value={local.tagline}
+                  onChange={(e) => update("tagline", e.target.value)}
+                  data-testid="input-tagline"
+                />
+              </Field>
+              <Field label="Company address">
+                <Input
+                  value={local.companyAddress}
+                  onChange={(e) => update("companyAddress", e.target.value)}
+                  data-testid="input-companyAddress"
+                />
+              </Field>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Company phone">
+                  <Input
+                    value={local.companyPhone}
+                    onChange={(e) => update("companyPhone", e.target.value)}
+                    data-testid="input-companyPhone"
+                  />
+                </Field>
+                <Field label="Company website">
+                  <Input
+                    value={local.companyWebsite}
+                    onChange={(e) => update("companyWebsite", e.target.value)}
+                    data-testid="input-companyWebsite"
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {section === "cta" && (
+            <CtaEditor
+              value={mergedCtas(local)}
+              onChange={(next) =>
+                setLocalDirect((s) => {
+                  const n = { ...s, ctas: next, ctaText: "", ctaUrl: "" };
+                  onChange(n);
+                  return n;
+                })
+              }
+            />
+          )}
+
+          {section === "disclaimer" && (
+            <Field label="Legal disclaimer">
+              <Textarea
+                value={local.disclaimer}
+                onChange={(e) => update("disclaimer", e.target.value)}
+                rows={5}
+                placeholder="This email and any attachments are confidential…"
+                data-testid="textarea-disclaimer"
+              />
+            </Field>
+          )}
+        </div>
+      </div>
+
+      {/* Sticky live preview */}
+      <div className="lg:sticky lg:top-20 min-w-0">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          Preview — using {exampleStaff.fullName}
+        </div>
+        <div className="rounded-xl border border-card-border bg-card p-5 shadow-sm overflow-x-auto">
+          <SignaturePreview
+            brand={local}
+            staff={exampleStaff}
+            showCopy={false}
+            plan={company?.plan}
+            onResizeLogo={(px) => update("logoWidth", px)}
+            onResizeBanner={(px) => update("bannerWidth", px)}
+            onResizePhoto={(px) => update("photoSize", px)}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+          Preview updates instantly. Save applies these changes to every staff signature.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Small SVG diagrams for the visual layout picker.
+const LAYOUT_TILES: {
+  id: BrandConfig["layout"];
+  label: string;
+  diagram: React.ReactNode;
+}[] = [
+  {
+    id: "horizontal",
+    label: "Horizontal",
+    diagram: (
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <rect x="6" y="10" width="22" height="20" rx="2" className="fill-muted" />
+        <rect x="33" y="12" width="36" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="33" y="18" width="28" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="33" y="23" width="32" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="33" y="27" width="24" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "stacked",
+    label: "Stacked",
+    diagram: (
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <rect x="6" y="6" width="30" height="8" rx="2" className="fill-muted" />
+        <rect x="6" y="18" width="48" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="6" y="24" width="36" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="6" y="29" width="42" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "compact",
+    label: "Compact",
+    diagram: (
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <rect x="6" y="14" width="14" height="14" rx="2" className="fill-muted" />
+        <rect x="24" y="15" width="30" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="24" y="22" width="46" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "photo-left",
+    label: "Photo left",
+    diagram: (
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <circle cx="16" cy="20" r="10" className="fill-muted" />
+        <rect x="32" y="11" width="36" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="32" y="17" width="28" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="32" y="22" width="32" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="32" y="27" width="20" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "banner",
+    label: "Banner on top",
+    diagram: (
+      // Banner is the loudest element: sits above the whole signature.
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <rect x="6" y="5" width="64" height="11" rx="2" className="fill-primary/30" />
+        <rect x="6" y="20" width="14" height="14" rx="2" className="fill-muted" />
+        <rect x="24" y="22" width="34" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="24" y="28" width="28" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "card",
+    label: "Card",
+    diagram: (
+      // Rounded bordered frame wrapping the whole signature.
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <rect x="3" y="4" width="74" height="32" rx="4" className="fill-none stroke-muted-foreground" strokeWidth={1} />
+        <rect x="9" y="11" width="18" height="18" rx="2" className="fill-muted" />
+        <rect x="31" y="12" width="36" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="31" y="18" width="28" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="31" y="23" width="30" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "divided",
+    label: "Divided",
+    diagram: (
+      // Strong vertical rule between logo and text + horizontal rules.
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <rect x="6" y="9" width="18" height="22" rx="2" className="fill-muted" />
+        <rect x="27" y="8" width="1.5" height="24" className="fill-muted-foreground" />
+        <rect x="33" y="10" width="36" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="33" y="17" width="36" height="1" className="fill-muted" />
+        <rect x="33" y="20" width="28" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="33" y="25" width="32" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+  {
+    id: "centered",
+    label: "Centered",
+    diagram: (
+      // Portrait on top, then logo, name, contact — all centered.
+      <svg viewBox="0 0 80 40" className="w-full h-full">
+        <circle cx="40" cy="12" r="6" className="fill-muted" />
+        <rect x="26" y="22" width="28" height="3" rx="1" className="fill-foreground/70" />
+        <rect x="30" y="28" width="20" height="2" rx="1" className="fill-muted-foreground" />
+        <rect x="28" y="32" width="24" height="2" rx="1" className="fill-muted-foreground" />
+      </svg>
+    ),
+  },
+];
+
+function LayoutTile({
+  selected,
+  onClick,
+  label,
+  diagram,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  label: string;
+  diagram: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group border rounded-lg p-2 text-left transition ${
+        selected
+          ? "border-primary ring-2 ring-primary/30 bg-primary/5"
+          : "border-border hover:border-primary/50 hover:bg-muted/50"
+      }`}
+    >
+      <div className="aspect-[2/1] bg-background rounded border border-border/60 flex items-center justify-center overflow-hidden">
+        {diagram}
+      </div>
+      <div
+        className={`text-xs mt-2 font-medium ${
+          selected ? "text-primary" : "text-foreground"
+        }`}
+      >
+        {label}
+      </div>
+    </button>
+  );
+}
+
+// ---------- Company info editor ----------
+// A dedicated top-level page for the company’s identity fields: display name,
+// tagline, address, phone, website, and legal disclaimer. Same brand-config
+// storage as the template editor, but presented on its own so admins can find
+// it without hunting through the styling controls.
+function CompanyEditor({
+  brand,
+  onChange,
+}: {
+  brand: BrandConfig;
+  onChange: (b: BrandConfig) => void;
+}) {
   const [local, setLocal] = useState<BrandConfig>(brand);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -617,258 +1658,204 @@ function BrandEditor({
       const r = await apiRequest("PUT", "/api/brand", local);
       const saved = await r.json();
       queryClient.setQueryData(["/api/brand"], saved);
-      toast({ title: "Brand saved" });
+      toast({ title: "Company info saved" });
     } catch (e: any) {
-      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+      toast({
+        title: "Save failed",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
   }
 
+  const dirty = JSON.stringify(local) !== JSON.stringify(brand);
+
   return (
-    <div className="grid lg:grid-cols-[380px_1fr] gap-6">
-      {/* Editor */}
-      <div className="space-y-5">
+    <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 items-start">
+      <div className="space-y-6">
         <div>
-          <h2 className="font-serif text-xl mb-1">Signature template</h2>
+          <h1 className="font-serif text-2xl">Company info</h1>
           <p className="text-sm text-muted-foreground">
-            These settings apply to every staff signature.
+            These details appear on every staff signature. Staff can override
+            phone, website, and address on their own profile.
           </p>
         </div>
 
-        <Section title="Layout">
-          <div className="space-y-3">
-            <Field label="Layout style">
-              <Select
-                value={local.layout}
-                onValueChange={(v) => update("layout", v as BrandConfig["layout"])}
-              >
-                <SelectTrigger data-testid="select-layout">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="horizontal">Horizontal (logo + info side by side)</SelectItem>
-                  <SelectItem value="stacked">Stacked (logo above info)</SelectItem>
-                  <SelectItem value="compact">Compact (single row)</SelectItem>
-                  <SelectItem value="photo-left">Photo left</SelectItem>
-                  <SelectItem value="banner">Banner promo</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-
-            <ToggleRow
-              label="Show staff photo"
-              value={local.showPhoto}
-              onChange={(v) => update("showPhoto", v)}
-              testId="switch-showPhoto"
-            />
-            <ToggleRow
-              label="Vertical divider between logo & info"
-              value={local.showDivider}
-              onChange={(v) => update("showDivider", v)}
-              testId="switch-showDivider"
-            />
-            <ToggleRow
-              label="Show social icons"
-              value={local.showSocialIcons}
-              onChange={(v) => update("showSocialIcons", v)}
-              testId="switch-showSocials"
-            />
+        <div className="bg-card border border-card-border rounded-lg p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold text-sm mb-3">Identity</h2>
+            <div className="space-y-3">
+              <Field label="Display name">
+                <Input
+                  value={local.companyDisplayName}
+                  onChange={(e) => update("companyDisplayName", e.target.value)}
+                  placeholder="Elapid Group Pty Ltd"
+                  data-testid="input-company-name"
+                />
+              </Field>
+              <Field label="Tagline">
+                <Input
+                  value={local.tagline}
+                  onChange={(e) => update("tagline", e.target.value)}
+                  placeholder="Wildlife management for the real world"
+                  data-testid="input-company-tagline"
+                />
+              </Field>
+            </div>
           </div>
-        </Section>
+        </div>
 
-        <Section title="Logo & banner">
-          <Field label="Logo URL">
-            <Input
-              value={local.logoUrl}
-              onChange={(e) => update("logoUrl", e.target.value)}
-              placeholder="https://…/logo.png"
-              data-testid="input-logoUrl"
-            />
-          </Field>
-          <Field label={`Logo width: ${local.logoWidth}px`}>
-            <Slider
-              min={40}
-              max={300}
-              step={5}
-              value={[local.logoWidth]}
-              onValueChange={(v) => update("logoWidth", v[0])}
-              data-testid="slider-logoWidth"
-            />
-          </Field>
-          <Field label="Banner image URL (optional)">
-            <Input
-              value={local.bannerUrl}
-              onChange={(e) => update("bannerUrl", e.target.value)}
-              placeholder="https://…/banner.png"
-              data-testid="input-bannerUrl"
-            />
-          </Field>
-          <Field label="Banner link URL">
-            <Input
-              value={local.bannerHref}
-              onChange={(e) => update("bannerHref", e.target.value)}
-              placeholder="example.com/promo"
-              data-testid="input-bannerHref"
-            />
-          </Field>
-        </Section>
-
-        <Section title="Colors">
-          <div className="grid grid-cols-2 gap-3">
-            <ColorField label="Primary" value={local.primaryColor} onChange={(v) => update("primaryColor", v)} />
-            <ColorField label="Accent" value={local.accentColor} onChange={(v) => update("accentColor", v)} />
-            <ColorField label="Text" value={local.textColor} onChange={(v) => update("textColor", v)} />
-            <ColorField label="Muted" value={local.mutedColor} onChange={(v) => update("mutedColor", v)} />
-            <ColorField label="Divider" value={local.dividerColor} onChange={(v) => update("dividerColor", v)} />
+        <div className="bg-card border border-card-border rounded-lg p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold text-sm mb-3">Company logo</h2>
+            <p className="text-xs text-muted-foreground -mt-2 mb-3">
+              Appears in every staff signature. Fine-tune size and alignment
+              from Brand & template → Logo & banner.
+            </p>
+            <Field label="Logo image">
+              <ImageUploader
+                value={local.logoUrl}
+                onChange={(v) => update("logoUrl", v)}
+                placeholder="Paste an image URL or upload"
+              />
+            </Field>
           </div>
-        </Section>
+        </div>
 
-        <Section title="Type">
-          <Field label="Font family (email-safe)">
-            <Select
-              value={local.fontFamily}
-              onValueChange={(v) => update("fontFamily", v as BrandConfig["fontFamily"])}
-            >
-              <SelectTrigger data-testid="select-fontFamily">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["Arial", "Helvetica", "Georgia", "Verdana", "Tahoma", "Trebuchet MS"].map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {f}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={`Font size: ${local.fontSize}px`}>
-            <Slider
-              min={10}
-              max={18}
-              step={1}
-              value={[local.fontSize]}
-              onValueChange={(v) => update("fontSize", v[0])}
-              data-testid="slider-fontSize"
-            />
-          </Field>
-          <ToggleRow
-            label="Bold name"
-            value={local.nameBold}
-            onChange={(v) => update("nameBold", v)}
-            testId="switch-nameBold"
-          />
-        </Section>
+        <div className="bg-card border border-card-border rounded-lg p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold text-sm mb-3">Contact</h2>
+            <div className="space-y-3">
+              <Field label="Company address">
+                <Input
+                  value={local.companyAddress}
+                  onChange={(e) => update("companyAddress", e.target.value)}
+                  placeholder="123 Example Street, Brisbane QLD 4000"
+                  data-testid="input-company-address"
+                />
+              </Field>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Phone">
+                  <Input
+                    value={local.companyPhone}
+                    onChange={(e) => update("companyPhone", e.target.value)}
+                    placeholder="+61 7 5000 0000"
+                    data-testid="input-company-phone"
+                  />
+                </Field>
+                <Field label="Website">
+                  <Input
+                    value={local.companyWebsite}
+                    onChange={(e) => update("companyWebsite", e.target.value)}
+                    placeholder="example.com"
+                    data-testid="input-company-website"
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        <Section title="Company details">
-          <Field label="Display name">
-            <Input
-              value={local.companyDisplayName}
-              onChange={(e) => update("companyDisplayName", e.target.value)}
-              data-testid="input-companyDisplayName"
-            />
-          </Field>
-          <Field label="Tagline">
-            <Input
-              value={local.tagline}
-              onChange={(e) => update("tagline", e.target.value)}
-              data-testid="input-tagline"
-            />
-          </Field>
-          <Field label="Company address">
-            <Input
-              value={local.companyAddress}
-              onChange={(e) => update("companyAddress", e.target.value)}
-              data-testid="input-companyAddress"
-            />
-          </Field>
-          <FieldRow>
-            <Field label="Company phone">
-              <Input
-                value={local.companyPhone}
-                onChange={(e) => update("companyPhone", e.target.value)}
-                data-testid="input-companyPhone"
+        <div className="bg-card border border-card-border rounded-lg p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold text-sm mb-3">Legal disclaimer</h2>
+            <Field label="Text that appears below every signature">
+              <Textarea
+                value={local.disclaimer}
+                onChange={(e) => update("disclaimer", e.target.value)}
+                rows={6}
+                placeholder="This email and any attachments are confidential…"
+                data-testid="textarea-company-disclaimer"
               />
             </Field>
-            <Field label="Company website">
-              <Input
-                value={local.companyWebsite}
-                onChange={(e) => update("companyWebsite", e.target.value)}
-                data-testid="input-companyWebsite"
-              />
-            </Field>
-          </FieldRow>
-        </Section>
+          </div>
+        </div>
 
-        <Section title="Labels">
-          <FieldRow>
-            <Field label="Phone">
-              <Input value={local.phoneLabel} onChange={(e) => update("phoneLabel", e.target.value)} />
-            </Field>
-            <Field label="Mobile">
-              <Input value={local.mobileLabel} onChange={(e) => update("mobileLabel", e.target.value)} />
-            </Field>
-          </FieldRow>
-          <FieldRow>
-            <Field label="Email">
-              <Input value={local.emailLabel} onChange={(e) => update("emailLabel", e.target.value)} />
-            </Field>
-            <Field label="Website">
-              <Input value={local.websiteLabel} onChange={(e) => update("websiteLabel", e.target.value)} />
-            </Field>
-          </FieldRow>
-        </Section>
-
-        <Section title="Call to action">
-          <FieldRow>
-            <Field label="Button text">
-              <Input
-                value={local.ctaText}
-                onChange={(e) => update("ctaText", e.target.value)}
-                placeholder="Book a call"
-                data-testid="input-ctaText"
-              />
-            </Field>
-            <Field label="Button URL">
-              <Input
-                value={local.ctaUrl}
-                onChange={(e) => update("ctaUrl", e.target.value)}
-                placeholder="cal.com/…"
-                data-testid="input-ctaUrl"
-              />
-            </Field>
-          </FieldRow>
-        </Section>
-
-        <Section title="Disclaimer">
-          <Textarea
-            value={local.disclaimer}
-            onChange={(e) => update("disclaimer", e.target.value)}
-            rows={4}
-            placeholder="This email and any attachments are confidential…"
-            data-testid="textarea-disclaimer"
-          />
-        </Section>
-
-        <div className="sticky bottom-4 bg-background/95 backdrop-blur border border-border rounded-lg p-3 flex items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground">
-            Changes are previewed live. Save to apply to all staff signatures.
-          </span>
-          <Button onClick={save} disabled={saving} data-testid="button-save-brand">
-            {saving ? "Saving…" : "Save template"}
+        <div className="flex items-center justify-between gap-3 sticky bottom-4">
+          <div className="text-xs text-muted-foreground">
+            {dirty ? "You have unsaved changes." : "All changes saved."}
+          </div>
+          <Button
+            onClick={save}
+            disabled={saving || !dirty}
+            data-testid="button-save-company"
+          >
+            {saving ? "Saving…" : "Save company info"}
           </Button>
         </div>
       </div>
 
-      {/* Preview */}
-      <div className="space-y-3">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">
-          Preview (using {exampleStaff.fullName})
+      {/* Right column: at-a-glance summary card. */}
+      <div className="lg:sticky lg:top-20">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          Summary
         </div>
-        <SignaturePreview brand={local} staff={exampleStaff} showCopy={false} />
-        <div className="text-xs text-muted-foreground border-t border-border pt-3">
-          This is how every staff member's signature will look with the current template.
+        <div className="bg-card border border-card-border rounded-lg p-5 space-y-3">
+          {local.logoUrl ? (
+            <div className="flex items-center justify-center bg-muted/30 rounded-md py-4">
+              <img
+                src={local.logoUrl}
+                alt="Company logo preview"
+                className="max-h-20 max-w-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center bg-muted/30 rounded-md py-6 text-xs text-muted-foreground italic">
+              No logo uploaded yet
+            </div>
+          )}
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              Display name
+            </div>
+            <div className="text-lg font-semibold">
+              {local.companyDisplayName || (
+                <span className="text-muted-foreground italic font-normal">
+                  Not set
+                </span>
+              )}
+            </div>
+            {local.tagline && (
+              <div className="text-sm italic text-muted-foreground">
+                {local.tagline}
+              </div>
+            )}
+          </div>
+          <div className="border-t border-border pt-3 space-y-2 text-sm">
+            <SummaryRow label="Phone" value={local.companyPhone} />
+            <SummaryRow label="Website" value={local.companyWebsite} />
+            <SummaryRow label="Address" value={local.companyAddress} />
+          </div>
+          {local.disclaimer && (
+            <div className="border-t border-border pt-3">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                Disclaimer
+              </div>
+              <div className="text-xs text-muted-foreground line-clamp-4">
+                {local.disclaimer}
+              </div>
+            </div>
+          )}
         </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Head to Brand & template to preview these fields inside a full
+          signature layout.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">
+        {label}
+      </div>
+      <div className="text-sm text-right truncate">
+        {value || <span className="text-muted-foreground italic">Not set</span>}
       </div>
     </div>
   );
@@ -943,5 +1930,335 @@ function Logo() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+// -- Contact row editor -------------------------------------------------------
+// Renders an SVG icon inline using dangerouslySetInnerHTML — the icon library
+// returns raw SVG strings so the picker and the copied HTML use the same art.
+function SvgIconInline({ svg, size = 20 }: { svg: string; size?: number }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+      // eslint-disable-next-line react/no-danger
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
+function ContactRowEditor(props: {
+  enabled: boolean;
+  onEnabledChange: (v: boolean) => void;
+  enabledDisabled?: boolean;
+  rowName: string;
+  iconRow: "phone" | "mobile" | "email" | "website";
+  iconValue: string;
+  onIconChange: (v: string) => void;
+  labelValue: string;
+  onLabelChange: (v: string) => void;
+}) {
+  const {
+    enabled,
+    onEnabledChange,
+    enabledDisabled,
+    rowName,
+    iconRow,
+    iconValue,
+    onIconChange,
+    labelValue,
+    onLabelChange,
+  } = props;
+  const mode: "icon" | "label" = labelValue.trim() ? "label" : "icon";
+  const options = CONTACT_ICONS[iconRow] || [];
+  const current = contactIconById(iconRow, iconValue) || options[0];
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="font-medium text-sm">{rowName} row</div>
+        {enabledDisabled ? (
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Always on</span>
+        ) : (
+          <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+        )}
+      </div>
+      {enabled && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onLabelChange("")}
+              className={`text-xs px-3 py-1 rounded-full border transition ${
+                mode === "icon"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background border-input text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Icon
+            </button>
+            <button
+              type="button"
+              onClick={() => onLabelChange(labelValue || rowName.slice(0, 1).toUpperCase())}
+              className={`text-xs px-3 py-1 rounded-full border transition ${
+                mode === "label"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background border-input text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Text label
+            </button>
+          </div>
+          {mode === "icon" ? (
+            <Select value={iconValue || (current?.id ?? "")} onValueChange={onIconChange}>
+              <SelectTrigger className="w-full max-w-[320px]" data-testid={`select-icon-${iconRow}`}>
+                <SelectValue asChild>
+                  <div className="flex items-center gap-2 text-sm">
+                    {current ? <SvgIconInline svg={current.svg("currentColor")} size={18} /> : null}
+                    <span>{current?.label ?? "Choose icon"}</span>
+                  </div>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    <div className="flex items-center gap-2">
+                      <SvgIconInline svg={o.svg("currentColor")} size={18} />
+                      <span>{o.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              value={labelValue}
+              onChange={(e) => onLabelChange(e.target.value)}
+              placeholder={`e.g. ${rowName === "Email" ? "Email:" : rowName.slice(0, 1) + ":"}`}
+              maxLength={16}
+              className="max-w-[220px]"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -- Socials editor -----------------------------------------------------------
+// A single flat list where users add rows, pick a network from the dropdown
+// (with brand icon preview), and paste the profile URL.
+function SocialsEditor({
+  value,
+  onChange,
+}: {
+  value: { network: string; url: string }[];
+  onChange: (v: { network: string; url: string }[]) => void;
+}) {
+  const list = value || [];
+  const update = (i: number, patch: Partial<{ network: string; url: string }>) =>
+    onChange(list.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const remove = (i: number) => onChange(list.filter((_, idx) => idx !== i));
+  const add = () => {
+    // Suggest the first unused network so the picker isn't parked on a duplicate.
+    const used = new Set(list.map((r) => r.network));
+    const next = SOCIAL_ICONS.find((s) => !used.has(s.id)) || SOCIAL_ICONS[0];
+    onChange([...list, { network: next.id, url: "" }]);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          Social profiles
+        </Label>
+        <span className="text-[11px] text-muted-foreground">{list.length} added</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Choose from {SOCIAL_ICONS.length} networks. Paste the full profile URL for each row.
+      </p>
+      {list.length === 0 && (
+        <div className="text-sm text-muted-foreground italic py-6 text-center border border-dashed border-border rounded-lg">
+          No profiles yet. Click “Add network” below to start.
+        </div>
+      )}
+      {list.map((row, i) => {
+        const def = socialById(row.network);
+        return (
+          <div key={i} className="flex items-start gap-2">
+            <div className="w-[190px] shrink-0">
+              <Select value={row.network} onValueChange={(v) => update(i, { network: v })}>
+                <SelectTrigger>
+                  <SelectValue asChild>
+                    <div className="flex items-center gap-2 text-sm">
+                      {def ? (
+                        <SvgIconInline
+                          svg={def.svg(def.brandColor || "currentColor")}
+                          size={18}
+                        />
+                      ) : null}
+                      <span>{def?.label ?? "Pick network"}</span>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="max-h-[320px]">
+                  {SOCIAL_ICONS.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <div className="flex items-center gap-2">
+                        <SvgIconInline
+                          svg={s.svg(s.brandColor || "currentColor")}
+                          size={18}
+                        />
+                        <span>{s.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Input
+              value={row.url}
+              onChange={(e) => update(i, { url: e.target.value })}
+              placeholder={`https://…`}
+              className="flex-1"
+            />
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="h-9 px-2 text-xs text-destructive hover:underline"
+              aria-label="Remove"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        );
+      })}
+      <Button type="button" variant="outline" onClick={add} className="w-full">
+        + Add network
+      </Button>
+    </div>
+  );
+}
+
+// -- CTA editor ---------------------------------------------------------------
+type Cta = { text: string; url: string; style: "solid" | "outline" | "link" };
+export function mergedCtas(b: BrandConfig): Cta[] {
+  const legacy: Cta[] =
+    b.ctaText && b.ctaUrl ? [{ text: b.ctaText, url: b.ctaUrl, style: "solid" }] : [];
+  const list = (b.ctas as Cta[]) || [];
+  return [...legacy, ...list];
+}
+function CtaEditor({ value, onChange }: { value: Cta[]; onChange: (v: Cta[]) => void }) {
+  const update = (i: number, patch: Partial<Cta>) =>
+    onChange(value.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+  const add = () =>
+    onChange([...value, { text: "", url: "", style: "solid" }]);
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Add one or more call-to-action buttons. Each staff signature shows all of them.
+      </p>
+      {value.length === 0 && (
+        <div className="text-sm text-muted-foreground italic py-6 text-center border border-dashed border-border rounded-lg">
+          No buttons yet
+        </div>
+      )}
+      {value.map((c, i) => (
+        <div key={i} className="rounded-lg border border-border bg-background/40 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="font-medium text-sm">Button {i + 1}</div>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="text-xs text-destructive hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+          <FieldRow>
+            <Field label="Text">
+              <Input
+                value={c.text}
+                onChange={(e) => update(i, { text: e.target.value })}
+                placeholder="Book a call"
+              />
+            </Field>
+            <Field label="URL">
+              <Input
+                value={c.url}
+                onChange={(e) => update(i, { url: e.target.value })}
+                placeholder="cal.com/…"
+              />
+            </Field>
+          </FieldRow>
+          <div>
+            <Label className="text-xs text-muted-foreground">Style</Label>
+            <div className="flex gap-2 mt-1">
+              {(["solid", "outline", "link"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => update(i, { style: s })}
+                  className={`text-xs px-3 py-1 rounded-full border capitalize transition ${
+                    c.style === s
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background border-input text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" onClick={add} className="w-full">
+        + Add button
+      </Button>
+    </div>
+  );
+}
+
+// Small badge shown in the admin header that tells the user which plan
+// they're on. Trialing workspaces get a countdown chip so it never feels
+// like the trial is hidden away.
+function PlanBadge({
+  plan,
+  status,
+  trialEndsAt,
+}: {
+  plan: PlanId;
+  status: string;
+  trialEndsAt: number | null;
+}) {
+  const p = PLANS[plan] ?? PLANS.free;
+  const now = Date.now();
+  const trialing = trialEndsAt && trialEndsAt > now && plan === "free";
+  const days =
+    trialEndsAt && trialEndsAt > now
+      ? Math.ceil((trialEndsAt - now) / (24 * 60 * 60 * 1000))
+      : 0;
+  return (
+    <div className="hidden md:flex items-center gap-2 text-xs">
+      <span
+        className={`rounded-full px-2.5 py-1 font-medium ${
+          plan === "free"
+            ? "bg-slate-100 text-slate-600"
+            : "bg-teal-50 text-teal-700"
+        }`}
+      >
+        {p.name}
+      </span>
+      {trialing && (
+        <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
+          Trial · {days}d left
+        </span>
+      )}
+      {status === "past_due" && (
+        <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
+          Payment failed
+        </span>
+      )}
+    </div>
   );
 }

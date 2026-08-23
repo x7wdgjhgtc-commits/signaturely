@@ -1,4 +1,5 @@
 import type { BrandConfig, Staff } from "@shared/schema";
+import { contactIconById, socialById, PIN_SVG, renderSocialIconSvg } from "./iconLibrary";
 
 // Renders an email-safe signature as an HTML table with inline styles.
 // Uses tables + inline CSS so Outlook, Gmail, Apple Mail all render it faithfully.
@@ -19,34 +20,42 @@ function normalizeUrl(u: string): string {
   return `https://${u}`;
 }
 
-// Small inline SVG icons as data URIs — email clients block linked images
-// less aggressively than inline <svg>, and data URIs display everywhere.
-function iconDataUri(kind: string, color: string): string {
-  const c = encodeURIComponent(color);
-  const svg: Record<string, string> = {
-    phone: `<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='${color}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z'/></svg>`,
-    mobile: `<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='${color}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='2' width='14' height='20' rx='2'/><line x1='12' y1='18' x2='12' y2='18'/></svg>`,
-    mail: `<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='${color}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'/><polyline points='22,6 12,13 2,6'/></svg>`,
-    globe: `<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='${color}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='2' y1='12' x2='22' y2='12'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>`,
-    pin: `<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='${color}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg>`,
-    linkedin: `<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='${color}'><path d='M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2zM8 19H5v-9h3zM6.5 8.25A1.75 1.75 0 1 1 8.3 6.5a1.78 1.78 0 0 1-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0 0 13 14.19a.66.66 0 0 0 0 .14V19h-3v-9h2.9v1.3a3.11 3.11 0 0 1 2.7-1.4c1.55 0 3.36.86 3.36 3.66z'/></svg>`,
-    twitter: `<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='${color}'><path d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z'/></svg>`,
-    instagram: `<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='${color}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='2' width='20' height='20' rx='5'/><path d='M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z'/><line x1='17.5' y1='6.5' x2='17.51' y2='6.5'/></svg>`,
-    facebook: `<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='${color}'><path d='M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.77-3.89 1.09 0 2.24.2 2.24.2v2.47h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.89h-2.33v6.99A10 10 0 0 0 22 12z'/></svg>`,
-  };
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg[kind] || "")}`;
+// Icons come from the shared iconLibrary so the picker and renderer stay in sync.
+// Everything ships as an inline SVG data URI so emails render the same in Gmail,
+// Outlook, and Apple Mail (which all sanitise raw <svg> tags).
+function contactIconUri(row: "phone" | "mobile" | "email" | "website", id: string, color: string): string {
+  const def = contactIconById(row, id);
+  const svg = def ? def.svg(color) : "";
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function pinIconUri(color: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(PIN_SVG(color))}`;
+}
+
+function socialIconUri(id: string, style: string, accent: string, muted: string): string {
+  const def = socialById(id);
+  if (!def) return "";
+  const svg = renderSocialIconSvg(def, style as any, accent, muted);
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 interface RenderArgs {
   brand: BrandConfig;
   staff: Staff;
+  // If provided and === "free", we append a subtle "Signature by Signaturely"
+  // footer so free-plan customers have an incentive to upgrade. Any other
+  // plan (including undefined during preview) suppresses the watermark.
+  plan?: string;
 }
 
-export function renderSignatureHtml({ brand, staff }: RenderArgs): string {
+export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string {
   const {
     layout,
     logoUrl,
     logoWidth,
+    logoAlign,
+    logoHAlign,
     primaryColor,
     textColor,
     mutedColor,
@@ -54,10 +63,24 @@ export function renderSignatureHtml({ brand, staff }: RenderArgs): string {
     accentColor,
     fontFamily,
     fontSize,
+    nameSize,
     nameBold,
+    titleBold,
     showPhoto,
+    photoShape,
+    photoSize,
+    photoAlign,
     showDivider,
     showSocialIcons,
+    showPhone,
+    showMobile,
+    showWebsite,
+    showAddress,
+    showPronouns,
+    socialLinkedin,
+    socialTwitter,
+    socialInstagram,
+    socialFacebook,
     phoneLabel,
     mobileLabel,
     emailLabel,
@@ -74,167 +97,425 @@ export function renderSignatureHtml({ brand, staff }: RenderArgs): string {
     bannerHref,
   } = brand;
 
+  const photoRadius =
+    photoShape === "circle" ? "50%" : photoShape === "rounded" ? "12px" : "0";
+
   const baseFont = `font-family:${fontFamily}, Arial, sans-serif; font-size:${fontSize}px; line-height:1.45; color:${textColor};`;
   const smallStyle = `${baseFont} color:${mutedColor}; font-size:${Math.max(10, fontSize - 1)}px;`;
   const linkStyle = `color:${accentColor}; text-decoration:none;`;
 
-  const contactRow = (icon: string, label: string, value: string, href: string) => {
+  // A contact row shows EITHER a custom text label OR an icon, never both.
+  const contactRow = (
+    row: "phone" | "mobile" | "email" | "website",
+    iconId: string,
+    label: string,
+    value: string,
+    href: string,
+  ) => {
     if (!value) return "";
     const linked = href
       ? `<a href="${esc(href)}" style="${linkStyle}">${esc(value)}</a>`
       : esc(value);
-    const labelPart = label
-      ? `<span style="color:${mutedColor}; font-weight:600; margin-right:6px;">${esc(label)}</span>`
-      : "";
-    const iconImg = `<img src="${iconDataUri(icon, accentColor)}" width="14" height="14" alt="" style="vertical-align:middle; margin-right:6px; border:0;" />`;
-    return `<tr><td style="${baseFont} padding:2px 0;">${iconImg}${labelPart}${linked}</td></tr>`;
+    const indicator = label.trim()
+      ? `<span style="color:${mutedColor}; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; font-size:${Math.max(10, fontSize - 2)}px;">${esc(label)}</span>`
+      : `<img src="${contactIconUri(row, iconId, accentColor)}" width="14" height="14" alt="" style="display:inline-block; border:0; vertical-align:middle;" />`;
+    return `<tr>
+      <td width="22" valign="middle" align="left" style="padding:2px 8px 2px 0; white-space:nowrap; line-height:1;">${indicator}</td>
+      <td valign="middle" style="${baseFont} padding:2px 0; line-height:1.35;">${linked}</td>
+    </tr>`;
   };
 
-  const socialLink = (kind: string, url: string) => {
+  // Icon dimensions vary per style so outlined badges and minimal glyphs sit
+  // at visually equivalent sizes next to filled icons.
+  const socialSize =
+    brand.socialIconStyle === "outlined" ? 20 : brand.socialIconStyle === "minimal" ? 16 : 18;
+  const socialLink = (id: string, url: string) => {
     if (!url) return "";
-    return `<a href="${esc(normalizeUrl(url))}" style="text-decoration:none; margin-right:8px; display:inline-block;"><img src="${iconDataUri(kind, accentColor)}" width="18" height="18" alt="${kind}" style="border:0; vertical-align:middle;" /></a>`;
+    return `<a href="${esc(normalizeUrl(url))}" style="text-decoration:none; margin-right:8px; display:inline-block;"><img src="${socialIconUri(id, brand.socialIconStyle, accentColor, mutedColor)}" width="${socialSize}" height="${socialSize}" alt="${id}" style="border:0; vertical-align:middle;" /></a>`;
   };
+
+  const phoneVal = staff.phone || companyPhone;
+  const websiteVal = staff.website || companyWebsite;
+  const addressVal = staff.address || companyAddress;
 
   const contactBlock = `
     <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-      ${contactRow("phone", phoneLabel, staff.phone || companyPhone, staff.phone ? `tel:${staff.phone.replace(/\s+/g, "")}` : "")}
-      ${contactRow("mobile", mobileLabel, staff.mobile, staff.mobile ? `tel:${staff.mobile.replace(/\s+/g, "")}` : "")}
-      ${contactRow("mail", emailLabel, staff.email, staff.email ? `mailto:${staff.email}` : "")}
-      ${contactRow("globe", websiteLabel, staff.website || companyWebsite, normalizeUrl(staff.website || companyWebsite))}
-      ${contactRow("pin", "", staff.address || companyAddress, "")}
+      ${showPhone ? contactRow("phone", brand.phoneIcon, phoneLabel, phoneVal, phoneVal ? `tel:${phoneVal.replace(/\s+/g, "")}` : "") : ""}
+      ${showMobile ? contactRow("mobile", brand.mobileIcon, mobileLabel, staff.mobile, staff.mobile ? `tel:${staff.mobile.replace(/\s+/g, "")}` : "") : ""}
+      ${contactRow("email", brand.emailIcon, emailLabel, staff.email, staff.email ? `mailto:${staff.email}` : "")}
+      ${showWebsite ? contactRow("website", brand.websiteIcon, websiteLabel, websiteVal, normalizeUrl(websiteVal)) : ""}
+      ${showAddress ? (addressVal ? `<tr><td width="22" valign="middle" align="left" style="padding:2px 8px 2px 0; white-space:nowrap; line-height:1;"><img src="${pinIconUri(accentColor)}" width="14" height="14" alt="" style="display:inline-block; border:0; vertical-align:middle;" /></td><td valign="middle" style="${baseFont} padding:2px 0; line-height:1.35;">${esc(addressVal)}</td></tr>` : "") : ""}
     </table>
   `;
 
-  const socialsHtml = showSocialIcons
-    ? `<div style="margin-top:8px;">
-        ${socialLink("linkedin", staff.linkedin)}
-        ${socialLink("twitter", staff.twitter)}
-        ${socialLink("instagram", staff.instagram)}
-        ${socialLink("facebook", staff.facebook)}
-      </div>`
-    : "";
+  // Merge legacy staff-level social URLs with the new brand.socials[] list so
+  // existing configs keep rendering while new networks show up automatically.
+  const legacySocials: { network: string; url: string }[] = [];
+  if (socialLinkedin && staff.linkedin) legacySocials.push({ network: "linkedin", url: staff.linkedin });
+  if (socialTwitter && staff.twitter) legacySocials.push({ network: "twitter", url: staff.twitter });
+  if (socialInstagram && staff.instagram) legacySocials.push({ network: "instagram", url: staff.instagram });
+  if (socialFacebook && staff.facebook) legacySocials.push({ network: "facebook", url: staff.facebook });
 
-  const nameHtml = `<div style="${baseFont} font-size:${fontSize + 3}px; font-weight:${nameBold ? 700 : 600}; color:${primaryColor}; letter-spacing:0.2px;">${esc(staff.fullName)}${staff.pronouns ? `<span style="${smallStyle} font-weight:400; margin-left:6px;">(${esc(staff.pronouns)})</span>` : ""}</div>`;
+  const extraSocials = ((brand.socials as { network: string; url: string }[]) || []).filter(
+    (s) => s.network && s.url,
+  );
+
+  // Dedupe: brand list wins over legacy per network.
+  const seen = new Set<string>();
+  const allSocials: { network: string; url: string }[] = [];
+  for (const s of [...extraSocials, ...legacySocials]) {
+    if (seen.has(s.network)) continue;
+    seen.add(s.network);
+    if (socialById(s.network)) allSocials.push(s);
+  }
+
+  const socialsHtml =
+    showSocialIcons && allSocials.length > 0
+      ? `<div style="margin-top:8px;">${allSocials.map((s) => socialLink(s.network, s.url)).join("")}</div>`
+      : "";
+
+  const pronounsHtml =
+    showPronouns && staff.pronouns
+      ? `<span style="${smallStyle} font-weight:400; margin-left:6px;">(${esc(staff.pronouns)})</span>`
+      : "";
+
+  const nameHtml = `<div style="${baseFont} font-size:${nameSize}px; font-weight:${nameBold ? 700 : 500}; color:${primaryColor}; letter-spacing:0.2px;">${esc(staff.fullName)}${pronounsHtml}</div>`;
 
   const titleHtml = staff.jobTitle
-    ? `<div style="${baseFont} color:${textColor}; font-weight:600; margin-top:1px;">${esc(staff.jobTitle)}${staff.department ? `<span style="color:${mutedColor}; font-weight:400;"> · ${esc(staff.department)}</span>` : ""}</div>`
+    ? `<div style="${baseFont} color:${textColor}; font-weight:${titleBold ? 700 : 500}; margin-top:1px;">${esc(staff.jobTitle)}${staff.department ? `<span style="color:${mutedColor}; font-weight:400;"> · ${esc(staff.department)}</span>` : ""}</div>`
     : "";
 
   const companyHtml = companyDisplayName
     ? `<div style="${baseFont} color:${primaryColor}; font-weight:600; margin-top:2px;">${esc(companyDisplayName)}</div>${tagline ? `<div style="${smallStyle} font-style:italic;">${esc(tagline)}</div>` : ""}`
     : "";
 
+  // Merge legacy single CTA with the new ctas[] array so existing configs keep working.
+  const allCtas = [
+    ...(ctaText && ctaUrl ? [{ text: ctaText, url: ctaUrl, style: "solid" as const }] : []),
+    ...((brand.ctas as { text: string; url: string; style: "solid" | "outline" | "link" }[]) || []).filter(
+      (c) => c.text && c.url
+    ),
+  ];
+
+  const renderCta = (c: { text: string; url: string; style: string }) => {
+    const href = esc(normalizeUrl(c.url));
+    const text = esc(c.text);
+    if (c.style === "link") {
+      return `<a href="${href}" style="${linkStyle} font-weight:600; margin-right:14px; display:inline-block;">${text} →</a>`;
+    }
+    if (c.style === "outline") {
+      return `<a href="${href}" style="display:inline-block; background:transparent; color:${accentColor}; text-decoration:none; padding:5px 11px; border:1.5px solid ${accentColor}; border-radius:4px; ${baseFont} color:${accentColor}; font-weight:600; margin-right:8px;">${text}</a>`;
+    }
+    return `<a href="${href}" style="display:inline-block; background:${accentColor}; color:#ffffff; text-decoration:none; padding:6px 12px; border-radius:4px; ${baseFont} color:#ffffff; font-weight:600; margin-right:8px;">${text}</a>`;
+  };
+
   const ctaHtml =
-    ctaText && ctaUrl
-      ? `<div style="margin-top:10px;"><a href="${esc(normalizeUrl(ctaUrl))}" style="display:inline-block; background:${accentColor}; color:#ffffff; text-decoration:none; padding:6px 12px; border-radius:4px; ${baseFont} color:#ffffff; font-weight:600;">${esc(ctaText)}</a></div>`
+    allCtas.length > 0
+      ? `<div style="margin-top:10px; line-height:1.9;">${allCtas.map(renderCta).join("")}</div>`
       : "";
 
-  const bannerHtml = bannerUrl
-    ? `<tr><td style="padding-top:10px;">${bannerHref ? `<a href="${esc(normalizeUrl(bannerHref))}" style="text-decoration:none;">` : ""}<img src="${esc(bannerUrl)}" alt="" style="max-width:520px; height:auto; display:block; border:0;" />${bannerHref ? "</a>" : ""}</td></tr>`
+  // Banner stretches across the full signature width; the slider caps its max width
+  // so users can still keep it narrow if they prefer.
+  const bw = brand.bannerWidth || 520;
+  const bannerImg = bannerUrl
+    ? `<img src="${esc(bannerUrl)}" alt="" style="display:block; border:0; width:100%; max-width:${bw}px; height:auto;" />`
     : "";
+  const bannerCellInner = bannerUrl
+    ? `${bannerHref ? `<a href="${esc(normalizeUrl(bannerHref))}" style="text-decoration:none;">` : ""}${bannerImg}${bannerHref ? "</a>" : ""}`
+    : "";
+  // Banner colspan matches the widest row in the layout. We compute it below
+  // after we know whether the photo cell was included alongside the logo.
+  const makeBannerHtml = (cols: number) =>
+    bannerUrl
+      ? `<tr><td colspan="${cols}" style="padding-top:12px;">${bannerCellInner}</td></tr>`
+      : "";
 
   const disclaimerHtml = disclaimer
     ? `<tr><td style="${smallStyle} padding-top:10px; max-width:520px;">${esc(disclaimer)}</td></tr>`
     : "";
 
+  // Cell valign controls where the image sits when the text column is taller.
+  // `middle` centres a small logo/photo against a long bio; `top` keeps the
+  // classic “anchored to the top” look.
+  const photoValign = photoAlign === "middle" ? "middle" : "top";
+  const logoValign = logoAlign === "middle" ? "middle" : "top";
+
+  // Horizontal alignment of the logo inside its cell. `display:block` images
+  // need auto margins to center/right in a cell wider than the image.
+  const logoHAttr = logoHAlign === "center" ? "center" : logoHAlign === "right" ? "right" : "left";
+  const logoImgMargin =
+    logoHAlign === "center"
+      ? "margin:0 auto;"
+      : logoHAlign === "right"
+        ? "margin-left:auto; margin-right:0;"
+        : "margin:0;";
+
   const photoCell =
     showPhoto && staff.photoUrl
-      ? `<td valign="top" style="padding-right:16px;"><img src="${esc(staff.photoUrl)}" width="90" alt="${esc(staff.fullName)}" style="width:90px; height:90px; border-radius:50%; display:block; border:0; object-fit:cover;" /></td>`
+      ? `<td valign="${photoValign}" style="padding-right:16px; vertical-align:${photoValign};"><img src="${esc(staff.photoUrl)}" width="${photoSize}" alt="${esc(staff.fullName)}" style="width:${photoSize}px; height:${photoSize}px; border-radius:${photoRadius}; display:block; border:0; object-fit:cover;" /></td>`
       : "";
 
+  // Pin the logo cell to exactly logoWidth so the browser can’t steal space
+  // from the text column when the logo is large. width= plus inline width
+  // handles both Gmail and Outlook.
+  // A very pale user-set divider color (default #e5e7eb on white) is almost
+  // invisible. When the divider is turned ON we bump thin/pale values to a
+  // 2px slate rule so the toggle actually shows something. Users can still
+  // pick a darker color in Advanced to override.
+  const isPaleDivider = /^#(e|f)/i.test((dividerColor || "").trim());
+  const effectiveDividerColor = showDivider && isPaleDivider ? "#94a3b8" : dividerColor;
+  const dividerRule = showDivider
+    ? `2px solid ${effectiveDividerColor}`
+    : "0";
+
   const logoCell = logoUrl
-    ? `<td valign="top" style="padding-right:16px; border-right:${showDivider ? `2px solid ${dividerColor}` : "0"};"><img src="${esc(logoUrl)}" width="${logoWidth}" alt="${esc(companyDisplayName || "logo")}" style="width:${logoWidth}px; height:auto; display:block; border:0;" /></td>`
+    ? `<td valign="${logoValign}" align="${logoHAttr}" width="${logoWidth}" style="width:${logoWidth}px; min-width:${logoWidth}px; padding-right:16px; vertical-align:${logoValign}; text-align:${logoHAttr}; border-right:${dividerRule};"><img src="${esc(logoUrl)}" width="${logoWidth}" alt="${esc(companyDisplayName || "logo")}" style="width:${logoWidth}px; height:auto; display:block; border:0; ${logoImgMargin}" /></td>`
     : "";
 
   // ---------- Layouts ----------
   let inner = "";
 
+  const hasPhoto = showPhoto && !!staff.photoUrl;
+
+  // Inline photo sits IMMEDIATELY to the left of the name/title/company text
+  // (inside the text column). Wrapping the name block in a small nested table
+  // keeps it email-client safe.
+  const photoInlineImg = hasPhoto
+    ? `<img src="${esc(staff.photoUrl)}" width="${photoSize}" alt="${esc(staff.fullName)}" style="width:${photoSize}px; height:${photoSize}px; border-radius:${photoRadius}; display:block; border:0; object-fit:cover;" />`
+    : "";
+
+  const nameBlockHtml = hasPhoto
+    ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
+        <td valign="${photoValign}" style="vertical-align:${photoValign}; padding-right:12px;">${photoInlineImg}</td>
+        <td valign="${photoValign}" style="vertical-align:${photoValign};">${nameHtml}${titleHtml}${companyHtml}</td>
+      </tr></table>`
+    : `${nameHtml}${titleHtml}${companyHtml}`;
+
+  // Compact layout uses a slightly different text block (title + inline links).
+  const compactTextHtml = `
+    ${nameHtml}
+    <div style="${smallStyle} margin-top:2px;">${esc(staff.jobTitle)}${companyDisplayName ? ` · ${esc(companyDisplayName)}` : ""}</div>
+    <div style="${baseFont} margin-top:6px;">
+      ${staff.mobile ? `<a href="tel:${esc(staff.mobile)}" style="${linkStyle} margin-right:10px;">${esc(staff.mobile)}</a>` : ""}
+      ${staff.email ? `<a href="mailto:${esc(staff.email)}" style="${linkStyle}">${esc(staff.email)}</a>` : ""}
+    </div>
+    ${socialsHtml}
+  `;
+  const compactBlockHtml = hasPhoto
+    ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
+        <td valign="${photoValign}" style="vertical-align:${photoValign}; padding-right:12px;">${photoInlineImg}</td>
+        <td valign="${photoValign}" style="vertical-align:${photoValign};">${compactTextHtml}</td>
+      </tr></table>`
+    : compactTextHtml;
+
   if (layout === "stacked") {
+    // Stacked = true single column: logo row → photo row → name/title/company
+    // row → contact rows → socials → CTA. Everything is left-aligned inside
+    // its own row (respecting logoHAlign for the logo). We deliberately do NOT
+    // use nameBlockHtml here because that inlines the photo next to the name,
+    // which would make Stacked visually identical to Horizontal.
     inner = `
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-        ${logoUrl ? `<tr><td style="padding-bottom:10px;"><img src="${esc(logoUrl)}" width="${logoWidth}" alt="" style="width:${logoWidth}px; height:auto; border:0; display:block;" /></td></tr>` : ""}
+        ${logoUrl ? `<tr><td align="${logoHAttr}" style="padding-bottom:10px; text-align:${logoHAttr};"><img src="${esc(logoUrl)}" width="${logoWidth}" alt="" style="width:${logoWidth}px; height:auto; border:0; display:block; ${logoImgMargin}" /></td></tr>` : ""}
+        ${hasPhoto ? `<tr><td style="padding-bottom:10px;"><img src="${esc(staff.photoUrl)}" width="${photoSize}" alt="${esc(staff.fullName)}" style="width:${photoSize}px; height:${photoSize}px; border-radius:${photoRadius}; display:block; border:0; object-fit:cover;" /></td></tr>` : ""}
         <tr><td>${nameHtml}${titleHtml}${companyHtml}</td></tr>
         <tr><td style="padding-top:8px;">${contactBlock}</td></tr>
         <tr><td>${socialsHtml}</td></tr>
         <tr><td>${ctaHtml}</td></tr>
-        ${bannerHtml}
+        ${makeBannerHtml(1)}
         ${disclaimerHtml}
       </table>
     `;
   } else if (layout === "compact") {
+    const compactCols = (logoUrl ? 1 : 0) + 1;
     inner = `
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${logoCell}
-          <td valign="top" style="padding-left:${logoUrl ? 16 : 0}px;">
-            ${nameHtml}
-            <div style="${smallStyle} margin-top:2px;">${esc(staff.jobTitle)}${companyDisplayName ? ` · ${esc(companyDisplayName)}` : ""}</div>
-            <div style="${baseFont} margin-top:6px;">
-              ${staff.mobile ? `<a href="tel:${esc(staff.mobile)}" style="${linkStyle} margin-right:10px;">${esc(staff.mobile)}</a>` : ""}
-              ${staff.email ? `<a href="mailto:${esc(staff.email)}" style="${linkStyle}">${esc(staff.email)}</a>` : ""}
-            </div>
-            ${socialsHtml}
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+            ${compactBlockHtml}
           </td>
         </tr>
-        ${bannerHtml}
+        ${makeBannerHtml(compactCols)}
         ${disclaimerHtml}
       </table>
     `;
   } else if (layout === "photo-left") {
+    // photo-left keeps the old “portrait leads, contact stack below” shape:
+    // photo on the far left, name/title/contact/socials/CTA all in the right
+    // column. This is the one place we intentionally do NOT inline the photo
+    // next to just the name.
+    const photoLeftCols = (hasPhoto ? 1 : 0) + 1;
     inner = `
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${photoCell}
-          <td valign="top">
+          <td valign="${photoValign}" style="vertical-align:${photoValign};">
             ${nameHtml}${titleHtml}${companyHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
             ${ctaHtml}
           </td>
         </tr>
-        ${bannerHtml}
+        ${makeBannerHtml(photoLeftCols)}
         ${disclaimerHtml}
       </table>
     `;
   } else if (layout === "banner") {
+    // Banner-first: banner image sits ABOVE the signature and is the loudest
+    // element. Falls back to a normal horizontal shape if no banner is set.
+    const bannerCols = (logoUrl ? 1 : 0) + 1;
+    const bannerAbove = bannerUrl
+      ? `<tr><td colspan="${bannerCols}" style="padding-bottom:14px;">${bannerCellInner}</td></tr>`
+      : "";
     inner = `
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        ${bannerAbove}
         <tr>
           ${logoCell}
-          <td valign="top" style="padding-left:${logoUrl ? 16 : 0}px;">
-            ${nameHtml}${titleHtml}${companyHtml}
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+            ${nameBlockHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
             ${ctaHtml}
           </td>
         </tr>
-        <tr><td colspan="2" style="padding-top:12px;">${bannerUrl ? `${bannerHref ? `<a href="${esc(normalizeUrl(bannerHref))}">` : ""}<img src="${esc(bannerUrl)}" alt="" style="max-width:560px; height:auto; display:block; border:0;" />${bannerHref ? "</a>" : ""}` : ""}</td></tr>
+        ${disclaimerHtml}
+      </table>
+    `;
+  } else if (layout === "card") {
+    // Card: whole signature wrapped in a rounded bordered box so it visually
+    // sits apart from the email body. Uses `border` on the outer table for
+    // Outlook compatibility instead of CSS box-shadow.
+    const horizCols = (logoUrl ? 1 : 0) + 1;
+    inner = `
+      <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate; border:1px solid ${dividerColor}; border-radius:12px; padding:16px 18px; background:#ffffff;">
+        <tr>
+          ${logoCell}
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+            ${nameBlockHtml}
+            <div style="padding-top:8px;">${contactBlock}</div>
+            ${socialsHtml}
+            ${ctaHtml}
+          </td>
+        </tr>
+        ${makeBannerHtml(horizCols)}
+        ${disclaimerHtml}
+      </table>
+    `;
+  } else if (layout === "divided") {
+    // Divided: force a vertical rule between logo column and text column and
+    // add subtle horizontal separators between the name block and contact rows
+    // regardless of the showDivider setting (the whole point of this layout).
+    const dividedCols = (logoUrl ? 1 : 0) + 1;
+    // Rebuild logo cell with a mandatory strong vertical rule.
+    const dividedLogoCell = logoUrl
+      ? `<td valign="${logoValign}" align="${logoHAttr}" width="${logoWidth}" style="width:${logoWidth}px; min-width:${logoWidth}px; padding-right:20px; vertical-align:${logoValign}; text-align:${logoHAttr}; border-right:2px solid ${dividerColor};"><img src="${esc(logoUrl)}" width="${logoWidth}" alt="${esc(companyDisplayName || "logo")}" style="width:${logoWidth}px; height:auto; display:block; border:0; ${logoImgMargin}" /></td>`
+      : "";
+    inner = `
+      <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr>
+          ${dividedLogoCell}
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl ? 20 : 0}px;">
+            ${nameBlockHtml}
+            <div style="height:1px; background:${dividerColor}; margin:10px 0;"></div>
+            ${contactBlock}
+            ${socialsHtml || ctaHtml ? `<div style="height:1px; background:${dividerColor}; margin:10px 0;"></div>` : ""}
+            ${socialsHtml}
+            ${ctaHtml}
+          </td>
+        </tr>
+        ${makeBannerHtml(dividedCols)}
+        ${disclaimerHtml}
+      </table>
+    `;
+  } else if (layout === "centered") {
+    // Centered: everything center-aligned in one column. Photo (if present)
+    // sits at the top as a portrait, then logo, name, contact, socials, CTA.
+    // Nested tables use `align="center"` + `margin:0 auto` so the whole block
+    // centers, not just the text inside each cell. Contact rows are rebuilt
+    // as a single centered line each (icon+value inline) instead of a left-
+    // anchored two-column table.
+    const centeredContactLine = (
+      row: "phone" | "mobile" | "email" | "website",
+      iconId: string,
+      label: string,
+      value: string,
+      href: string,
+    ) => {
+      if (!value) return "";
+      const linked = href
+        ? `<a href="${esc(href)}" style="${linkStyle}">${esc(value)}</a>`
+        : esc(value);
+      const indicator = label.trim()
+        ? `<span style="color:${mutedColor}; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; font-size:${Math.max(10, fontSize - 2)}px; margin-right:6px;">${esc(label)}</span>`
+        : `<img src="${contactIconUri(row, iconId, accentColor)}" width="14" height="14" alt="" style="display:inline-block; border:0; vertical-align:middle; margin-right:6px;" />`;
+      return `<div style="${baseFont} padding:2px 0; text-align:center; line-height:1.5;">${indicator}${linked}</div>`;
+    };
+    const centeredContact = `
+      ${showPhone ? centeredContactLine("phone", brand.phoneIcon, phoneLabel, phoneVal, phoneVal ? `tel:${phoneVal.replace(/\s+/g, "")}` : "") : ""}
+      ${showMobile ? centeredContactLine("mobile", brand.mobileIcon, mobileLabel, staff.mobile, staff.mobile ? `tel:${staff.mobile.replace(/\s+/g, "")}` : "") : ""}
+      ${centeredContactLine("email", brand.emailIcon, emailLabel, staff.email, staff.email ? `mailto:${staff.email}` : "")}
+      ${showWebsite ? centeredContactLine("website", brand.websiteIcon, websiteLabel, websiteVal, normalizeUrl(websiteVal)) : ""}
+      ${showAddress && addressVal ? `<div style="${baseFont} padding:2px 0; text-align:center; line-height:1.5;"><img src="${pinIconUri(accentColor)}" width="14" height="14" alt="" style="display:inline-block; border:0; vertical-align:middle; margin-right:6px;" />${esc(addressVal)}</div>` : ""}
+    `;
+    // Rebuild socials without the trailing right-margin so the row is truly centred.
+    const centeredSocials =
+      showSocialIcons && allSocials.length > 0
+        ? `<div style="margin-top:8px; text-align:center; line-height:0;">${allSocials
+            .map(
+              (s, i) =>
+                `<a href="${esc(normalizeUrl(s.url))}" style="text-decoration:none; display:inline-block; ${i === allSocials.length - 1 ? "" : "margin-right:8px;"}"><img src="${socialIconUri(s.network, brand.socialIconStyle, accentColor, mutedColor)}" width="${socialSize}" height="${socialSize}" alt="${esc(s.network)}" style="border:0; vertical-align:middle;" /></a>`,
+            )
+            .join("")}</div>`
+        : "";
+    // CTA row: strip trailing margin-right by centring the container.
+    const centeredCta =
+      allCtas.length > 0
+        ? `<div style="margin-top:10px; line-height:1.9; text-align:center;">${allCtas.map(renderCta).join("")}</div>`
+        : "";
+    inner = `
+      <table cellpadding="0" cellspacing="0" border="0" align="center" style="border-collapse:collapse; margin:0 auto;">
+        ${hasPhoto ? `<tr><td align="center" style="padding-bottom:10px; text-align:center;"><img src="${esc(staff.photoUrl)}" width="${photoSize}" alt="${esc(staff.fullName)}" style="width:${photoSize}px; height:${photoSize}px; border-radius:${photoRadius}; display:inline-block; border:0; object-fit:cover; margin:0 auto;" /></td></tr>` : ""}
+        ${logoUrl ? `<tr><td align="center" style="padding-bottom:10px; text-align:center;"><img src="${esc(logoUrl)}" width="${logoWidth}" alt="" style="width:${logoWidth}px; height:auto; border:0; display:inline-block; margin:0 auto;" /></td></tr>` : ""}
+        <tr><td align="center" style="text-align:center;">${nameHtml}${titleHtml}${companyHtml}</td></tr>
+        <tr><td align="center" style="padding-top:8px; text-align:center;">${centeredContact}</td></tr>
+        <tr><td align="center" style="text-align:center;">${centeredSocials}</td></tr>
+        <tr><td align="center" style="text-align:center;">${centeredCta}</td></tr>
+        ${makeBannerHtml(1)}
         ${disclaimerHtml}
       </table>
     `;
   } else {
-    // horizontal (default)
+    // horizontal (default): logo | [photo + name/title/company] over contact rows
+    const horizCols = (logoUrl ? 1 : 0) + 1;
     inner = `
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${logoCell}
-          <td valign="top" style="padding-left:${logoUrl ? 16 : 0}px;">
-            ${nameHtml}${titleHtml}${companyHtml}
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+            ${nameBlockHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
             ${ctaHtml}
           </td>
         </tr>
-        ${bannerHtml}
+        ${makeBannerHtml(horizCols)}
         ${disclaimerHtml}
       </table>
     `;
   }
 
-  return `<div style="${baseFont}">${inner}</div>`;
+  // Free-plan watermark. Sits below the disclaimer, faded and small.
+  const watermark =
+    plan === "free"
+      ? `<div style="margin-top:14px;font-family:${brand.fontFamily},sans-serif;font-size:10px;color:#94a3b8;">Signature by <a href="https://signaturely.app" style="color:#94a3b8;text-decoration:none;">Signaturely</a></div>`
+      : "";
+
+  return `<div style="${baseFont}">${inner}${watermark}</div>`;
 }
 
-export function renderSignaturePlain({ brand, staff }: RenderArgs): string {
+export function renderSignaturePlain({ brand, staff, plan }: RenderArgs): string {
   const lines: string[] = [];
   lines.push(staff.fullName);
   if (staff.jobTitle) lines.push([staff.jobTitle, staff.department].filter(Boolean).join(" · "));
@@ -247,5 +528,6 @@ export function renderSignaturePlain({ brand, staff }: RenderArgs): string {
   const addr = staff.address || brand.companyAddress;
   if (addr) lines.push(addr);
   if (brand.disclaimer) lines.push("", brand.disclaimer);
+  if (plan === "free") lines.push("", "Signature by Signaturely — signaturely.app");
   return lines.join("\n");
 }

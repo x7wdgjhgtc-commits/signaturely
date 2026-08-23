@@ -14,15 +14,20 @@ declare module "http" {
   }
 }
 
+// Signatures embed logos, banners, and profile photos as base64 data URIs,
+// which balloon the JSON payload well past Express’s default 100kb cap.
+// 25mb comfortably fits the 8mb image cap the uploader enforces plus
+// everything else on the brand config / staff record.
 app.use(
   express.json({
+    limit: "25mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "25mb" }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

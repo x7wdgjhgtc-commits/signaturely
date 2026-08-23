@@ -1,6 +1,21 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
+// deploy_website text-replaces __PORT_5000__ with a *relative* path fragment
+// ("port/5000") that the deployed static site forwards to the sandbox port.
+// The fragment must be resolved relative to the current document URL, so we
+// build a full absolute URL from document.baseURI to keep it stable across
+// hash-routed pages. In local dev the token stays literal and we fall back
+// to same-origin.
+const PORT_TOKEN = "__PORT_5000__";
+function resolveApiBase(): string {
+  if (PORT_TOKEN.startsWith("__PORT_")) return ""; // dev: same origin
+  if (typeof document !== "undefined") {
+    // e.g. https://sites.pplx.app/.../signaturely/dist/public/port/5000
+    return new URL(PORT_TOKEN, document.baseURI).toString().replace(/\/$/, "");
+  }
+  return PORT_TOKEN;
+}
+const API_BASE = resolveApiBase();
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -16,9 +31,9 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(`${API_BASE}${url}`, {
     method,
-    credentials: "include",
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
   });
 
   await throwIfResNotOk(res);
