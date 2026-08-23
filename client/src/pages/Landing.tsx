@@ -172,11 +172,11 @@ function TryDemoButton() {
 const HERO_BRAND: BrandConfig = {
   ...defaultBrandConfig,
   layout: "horizontal", // logo | name+contact, banner rendered underneath
-  logoUrl: "apple-logo.png",
+  logoUrl: "/apple-logo.png",
   logoWidth: 120,
   logoAlign: "middle",
   logoHAlign: "left",
-  bannerUrl: "apple-banner.png",
+  bannerUrl: "/apple-banner.png",
   bannerWidth: 520,
   bannerHref: "https://www.apple.com/iphone-15-pro/",
 
@@ -226,7 +226,7 @@ const HERO_STAFF: Staff = {
   mobile: "",
   website: "apple.com",
   address: "",
-  photoUrl: "steve-jobs.jpg",
+  photoUrl: "/steve-jobs.jpg",
   pronouns: "",
   bookingUrl: "",
   linkedin: "",
@@ -271,17 +271,28 @@ function HeroPreview() {
     ro.observe(outer);
     ro.observe(inner);
     window.addEventListener("resize", compute);
-    // Recompute after any image inside the card finishes loading, since
-    // that changes the natural height.
+    // Recompute whenever an image inside the card loads or fails to load,
+    // and periodically for the first second to catch late layout shifts on
+    // slow mobile connections. `offsetHeight` shrinks if the browser
+    // reserved height for an image that never loaded, so we want to always
+    // resync after every possible size change.
     const imgs = Array.from(inner.querySelectorAll("img"));
-    const onLoad = () => compute();
+    const onImgEvent = () => compute();
     imgs.forEach((img) => {
-      if (!img.complete) img.addEventListener("load", onLoad);
+      img.addEventListener("load", onImgEvent);
+      img.addEventListener("error", onImgEvent);
     });
+    const timers = [100, 300, 700, 1500].map((ms) =>
+      window.setTimeout(compute, ms),
+    );
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", compute);
-      imgs.forEach((img) => img.removeEventListener("load", onLoad));
+      imgs.forEach((img) => {
+        img.removeEventListener("load", onImgEvent);
+        img.removeEventListener("error", onImgEvent);
+      });
+      timers.forEach((t) => window.clearTimeout(t));
     };
   }, []);
 
