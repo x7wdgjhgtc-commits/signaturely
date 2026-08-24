@@ -351,7 +351,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${logoCell}
-          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px; min-width:220px;">
             ${compactBlockHtml}
           </td>
         </tr>
@@ -370,7 +370,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${photoCell}
-          <td valign="${photoValign}" style="vertical-align:${photoValign};">
+          <td valign="${photoValign}" style="vertical-align:${photoValign}; min-width:220px;">
             ${nameHtml}${titleHtml}${companyHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
@@ -394,7 +394,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
         ${bannerAbove}
         <tr>
           ${logoCell}
-          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px; min-width:220px;">
             ${nameBlockHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
@@ -413,7 +413,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate; border:1px solid ${dividerColor}; border-radius:12px; padding:16px 18px; background:#ffffff;">
         <tr>
           ${logoCell}
-          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px; min-width:220px;">
             ${nameBlockHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
@@ -438,7 +438,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${dividedLogoCell}
-          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl ? 20 : 0}px;">
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl ? 20 : 0}px; min-width:220px;">
             ${nameBlockHtml}
             <div style="height:1px; background:${dividerColor}; margin:10px 0;"></div>
             ${contactBlock}
@@ -517,7 +517,7 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr>
           ${logoCell}
-          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px;">
+          <td valign="${logoValign}" style="vertical-align:${logoValign}; padding-left:${logoUrl && showDivider ? 20 : logoUrl ? 16 : 0}px; min-width:220px;">
             ${nameBlockHtml}
             <div style="padding-top:8px;">${contactBlock}</div>
             ${socialsHtml}
@@ -537,7 +537,28 @@ export function renderSignatureHtml({ brand, staff, plan }: RenderArgs): string 
       ? `<div style="margin-top:14px;font-family:${brand.fontFamily},sans-serif;font-size:10px;color:#94a3b8;">Signature by <a href="https://signaturely.app" style="color:#94a3b8;text-decoration:none;">Signaturely</a></div>`
       : "";
 
-  return `<div style="${baseFont}">${inner}${watermark}</div>`;
+  // Mobile-safe wrapper.
+  //
+  // Outlook mobile, Apple Mail on iPhone, and Gmail on Android all try to
+  // "zoom-to-fit" a wide signature, which crushes text columns and squashes
+  // the name/email into 2–3 character wide strips (see the WJC Contracting bug
+  // report). Two things stop that:
+  //   1. `min-width` on the outer container forces the mail app to horizontally
+  //      scroll rather than squash — much better UX than broken text.
+  //   2. `-webkit-text-size-adjust:none` prevents iOS from auto-shrinking the
+  //      font (which visually squashes the whole thing).
+  // We also protect long email/URL strings from breaking mid-letter by allowing
+  // sensible word-break rather than character-break.
+  const wrapperStyle = [
+    baseFont,
+    "min-width:340px",
+    "-webkit-text-size-adjust:none",
+    "-ms-text-size-adjust:none",
+    "text-size-adjust:none",
+    "word-break:normal",
+    "overflow-wrap:break-word",
+  ].join("; ") + ";";
+  return `<div style="${wrapperStyle}">${inner}${watermark}</div>`;
 }
 
 export function renderSignaturePlain({ brand, staff, plan }: RenderArgs): string {
